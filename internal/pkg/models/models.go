@@ -8,12 +8,6 @@ type User struct {
 	Random   string `json:"-"`        //Random IV
 }
 
-// type OrderAccrual struct {
-// 	Number  int    `json:"order"`             //Unique order number
-// 	Status  string `json:"status"`            //Order status. Availible states: REGISTERED, REGISTERED, PROCESSING, PROCESSED
-// 	AccRual string `json:"accrual,omitempty"` //Calculated bonus value
-// }
-
 type Order struct {
 	Number  int       `json:"number"`      //Unique order number
 	Status  string    `json:"status"`      //Order status. Availible states: NEW, PROCESSING, INVALID, PROCESSED
