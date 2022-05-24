@@ -1,7 +1,19 @@
 package main
 
-import "fmt"
+import (
+	"net/http"
+
+	"github.com/go-chi/chi"
+
+	"github.com/t1mon-ggg/gophermart/internal/pkg/handlers"
+)
 
 func main() {
-	fmt.Println("Hello world")
+	app := handlers.NewGopherMart()
+
+	r := chi.NewRouter()
+
+	r.Route("/", app.Router)
+
+	http.ListenAndServe(app.Config.Bind, r)
 }
