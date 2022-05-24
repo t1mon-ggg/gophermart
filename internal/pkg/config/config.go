@@ -2,10 +2,12 @@ package config
 
 import (
 	"flag"
-	"log"
+	"fmt"
+	"os"
 
 	"github.com/caarlos0/env"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type Config struct {
@@ -23,9 +25,11 @@ func New() *Config {
 	}
 	err := s.readEnv()
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Err(err).Msg("Critical error whire reading ENV. Quitting")
+		os.Exit(1)
 	}
 	s.readCli()
+	log.Log().Msgf("Setuped log level is %s", zerolog.GlobalLevel().String())
 	return &s
 }
 
@@ -56,8 +60,6 @@ func (cfg *Config) readEnv() error {
 	if c.AccSystem != "" {
 		cfg.AccSystem = c.AccSystem
 	}
-	// parsed := fmt.Sprintf("Evironment parsed:\nBASE_URL=%s\nSERVER_ADDRESS=%s\nFILE_STORAGE_PATH=%s\nDATABASE_DSN=%s\n", c.BaseURL, c.ServerAddress, c.FileStoragePath, c.Database)
-	// log.Println(parsed)
 	return nil
 }
 
@@ -69,11 +71,11 @@ var flags = map[string]string{
 	"l":     "LOG_LEVEL",
 }
 
-var path = flag.String("a", "", flags["a"])
-var bind = flag.String("d", "", flags["d"])
-var accPath = flag.String("r", "", flags["r"])
-var debug = flag.Bool("debug", false, flags["debug"])
-var level = flag.Int("l", 3, flags["l"])
+var path = flag.String("a", "", fmt.Sprintf("reads %s from flags", flags["a"]))
+var bind = flag.String("d", "", fmt.Sprintf("reads %s from flags", flags["d"]))
+var accPath = flag.String("r", "", fmt.Sprintf("reads %s from flags", flags["r"]))
+var debug = flag.Bool("debug", false, "set log level to debug. overwrite other levels")
+var level = flag.Int("l", int(zerolog.ErrorLevel), "set log level")
 
 //ReadCli - чтение флагов командной строки
 func (cfg *Config) readCli() {
@@ -96,8 +98,8 @@ func (cfg *Config) readCli() {
 			}
 
 		}
+		if !isFlagPassed("debug") && !isFlagPassed("l") {
+			zerolog.SetGlobalLevel(zerolog.Level(*level))
+		}
 	}
-	// parsed := fmt.Sprintf("Flags parsed:\nBASE_URL=%s\nSERVER_ADDRESS=%s\nFILE_STORAGE_PATH=%s\nDATABASE_DSN=%s\n", *baseURL, *srvAddr, *filePath, *dbPath)
-	// log.Println(parsed)
-
 }
