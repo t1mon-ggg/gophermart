@@ -103,6 +103,6 @@ func (s *Database) DeleteContent(table string) error {
 	return nil
 }
 
-func (s *Database) Close() error {
-	return s.Close()
+func (s *Database) Close() {
+	s.conn.Close()
 }

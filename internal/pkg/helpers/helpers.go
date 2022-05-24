@@ -138,8 +138,5 @@ func UserConflict(err error) bool {
 
 func UserNotFound(err error) bool {
 	log.Debug().Msg("Check empty row error")
-	if err.Error() == "no rows in result set" {
-		return true
-	}
-	return false
+	return err.Error() == "no rows in result set"
 }
