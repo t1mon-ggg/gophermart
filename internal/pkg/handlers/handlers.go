@@ -58,6 +58,7 @@ func (s *Gophermart) Router(r chi.Router) {
 	r.Post("/api/user/balance/withdraw", s.postBalanceWithdraw) //Authorized only
 	r.Get("/api/user/balance/withdraw", s.getBalanceWithdraw)   //Authorized only
 	r.MethodNotAllowed(otherHandler)                            //All users
+	r.NotFound(otherHandler)
 }
 
 func otherHandler(w http.ResponseWriter, r *http.Request) {
@@ -78,14 +79,22 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msgf("Resived body %s", string(body))
+	log.Debug().Msgf("Recieved body %s", string(body))
 	err = json.Unmarshal(body, &newuser)
 	if err != nil {
 		log.Error().Err(err).Msg("Error while parsing JSON body")
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		http.Error(w, "Incorrect request format", http.StatusBadRequest)
+		return
+	}
+	if newuser.Name == "" || newuser.Password == "" {
+		log.Error().Err(err).Msg("Wrong user data")
+		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
 	pass, err := helpers.SecurePassword(newuser.Password)
+	if err != nil {
+		log.Error().Err(err).Msg("")
+	}
 	iv := helpers.RandStringRunes(12)
 	err = s.db.CreateUser(newuser.Name, pass, iv)
 	if err != nil {
@@ -103,7 +112,45 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Application in development", http.StatusInternalServerError)
+	var user models.User
+	ctype := r.Header.Get("Content-Type")
+	if ctype != "application/json" {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Request body read error")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	log.Debug().Msgf("Recieved body %s", string(body))
+	err = json.Unmarshal(body, &user)
+	if err != nil {
+		log.Error().Err(err).Msg("Error while parsing JSON body")
+		http.Error(w, "Incorrect request format", http.StatusBadRequest)
+		return
+	}
+	u, err := s.db.GetUser(user.Name)
+	if err != nil {
+		log.Error().Err(err).Msg("")
+		if helpers.UserNotFound(err) {
+			log.Debug().Msgf("User %s not found", user.Name)
+			http.Error(w, "Wrond username or password", http.StatusUnauthorized)
+			return
+		}
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if !helpers.ComparePassword(user.Password, u.Password) {
+		log.Debug().Msgf("User %s not found", user.Name)
+		http.Error(w, "Wrond username or password", http.StatusUnauthorized)
+		return
+	}
+	addCookie(w, "username", user.Name)
+	addCookie(w, "user_id", helpers.GenerateCookieValue(user.Name, u.Password, r.RemoteAddr, u.Random))
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte{})
 }
 
 func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +179,7 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 		var value string
 		var user string
 		free := false
-		if r.RequestURI == "/api/user/register" || r.RequestURI == "/api/user/login" {
+		if r.RequestURI == "/api/user/register" || r.RequestURI == "/api/user/login" || r.RequestURI == "/" {
 			log.Debug().Msg("Skip auth check. All users area")
 			free = true
 			next.ServeHTTP(w, r)

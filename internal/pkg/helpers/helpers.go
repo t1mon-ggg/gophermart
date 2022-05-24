@@ -138,13 +138,8 @@ func UserConflict(err error) bool {
 
 func UserNotFound(err error) bool {
 	log.Debug().Msg("Check empty row error")
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		log.Debug().Msgf("Error message: %s", pgErr.Message)
-		log.Debug().Msgf("Error code: %s", pgErr.Code)
-		if pgErr.Code == "23505" {
-			return true
-		}
+	if err.Error() == "no rows in result set" {
+		return true
 	}
 	return false
 }

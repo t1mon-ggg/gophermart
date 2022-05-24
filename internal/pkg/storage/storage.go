@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog/log"
@@ -9,7 +10,7 @@ import (
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 )
 
-//Prosgres
+//Postgres
 
 const (
 	dbSchema = `
@@ -93,4 +94,15 @@ func (s *Database) GetUser(login string) (models.User, error) {
 	user.Random = random
 	log.Debug().Msgf("Found user %s with password %s and random %s", user.Name, user.Password, user.Random)
 	return user, nil
+}
+func (s *Database) DeleteContent(table string) error {
+	_, err := s.conn.Exec(context.Background(), fmt.Sprintf("DELETE from \"%s\"", table))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Database) Close() error {
+	return s.Close()
 }
