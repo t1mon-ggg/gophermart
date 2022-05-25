@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/go-chi/chi"
 	chiMiddleware "github.com/go-chi/chi/middleware"
@@ -105,8 +106,8 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	addCookie(w, "username", newuser.Name)
-	addCookie(w, "user_id", helpers.GenerateCookieValue(newuser.Name, pass, r.RemoteAddr, iv))
+	helpers.SetCookie(w, "username", newuser.Name)
+	helpers.SetCookie(w, "user_id", helpers.GenerateCookieValue(newuser.Name, pass, r.RemoteAddr, iv))
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte{})
 }
@@ -147,14 +148,56 @@ func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Wrond username or password", http.StatusUnauthorized)
 		return
 	}
-	addCookie(w, "username", user.Name)
-	addCookie(w, "user_id", helpers.GenerateCookieValue(user.Name, u.Password, r.RemoteAddr, u.Random))
+	helpers.SetCookie(w, "username", user.Name)
+	helpers.SetCookie(w, "user_id", helpers.GenerateCookieValue(user.Name, u.Password, r.RemoteAddr, u.Random))
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte{})
 }
 
 func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Application in development", http.StatusInternalServerError)
+	ctype := r.Header.Get("Content-Type")
+	if ctype != "text/plain" {
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Error().Err(err).Msg("Request body read error")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	user, err := helpers.GetUser(r)
+	if err != nil {
+		log.Debug().Msg("Username cookie missing")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	log.Debug().Msgf("Recieved body %s", string(body))
+	order, err := strconv.Atoi(string(body))
+	if err != nil {
+		log.Error().Err(err).Msg("Incorrect number format")
+		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
+		return
+	}
+	log.Debug().Msgf("New order %v from user %v", order, user)
+	err = s.db.CreateOrder(order, user)
+	if err != nil {
+		if helpers.OrderUnique(err) {
+			w.WriteHeader(http.StatusConflict)
+			w.Write([]byte("Order already created by another user"))
+			return
+		}
+		if helpers.OrderExists(err) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Order already uploaded"))
+			return
+		}
+		log.Error().Err(err).Msg("Create order error")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte("Order accepted"))
 }
 
 func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
@@ -230,14 +273,4 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		}
 	})
-}
-
-func addCookie(w http.ResponseWriter, name, value string) {
-	cookie := http.Cookie{
-		Name:   name,
-		Value:  value,
-		MaxAge: 0,
-		Path:   "/",
-	}
-	http.SetCookie(w, &cookie)
 }

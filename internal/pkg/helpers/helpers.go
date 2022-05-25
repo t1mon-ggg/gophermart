@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"math/big"
+	"net/http"
 	"strings"
 
 	"github.com/jackc/pgconn"
@@ -136,7 +137,58 @@ func UserConflict(err error) bool {
 	return false
 }
 
+func OrderUnique(err error) bool {
+	log.Debug().Msg("Check unique user error")
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		log.Debug().Msgf("Error message: %s", pgErr.Message)
+		log.Debug().Msgf("Error code: %s", pgErr.Code)
+		if pgErr.Code == "23505" {
+			if strings.Contains(pgErr.Message, "orders_order_idx") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func OrderExists(err error) bool {
+	log.Debug().Msg("Check unique user's order error")
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		log.Debug().Msgf("Error message: %s", pgErr.Message)
+		log.Debug().Msgf("Error code: %s", pgErr.Code)
+		if pgErr.Code == "23505" {
+			if strings.Contains(pgErr.Message, "orders_order_user_idx") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func UserNotFound(err error) bool {
 	log.Debug().Msg("Check empty row error")
 	return err.Error() == "no rows in result set"
+}
+
+func SetCookie(w http.ResponseWriter, name, value string) {
+	cookie := http.Cookie{
+		Name:   name,
+		Value:  value,
+		MaxAge: 0,
+		Path:   "/",
+	}
+	http.SetCookie(w, &cookie)
+}
+
+func GetUser(r *http.Request) (string, error) {
+	cookie, err := r.Cookie("username")
+	if err != nil {
+		log.Error().Err(err)
+		return "", err
+	}
+	username := cookie.Value
+	log.Debug().Msgf("Username from cookie is %v", username)
+	return username, nil
 }

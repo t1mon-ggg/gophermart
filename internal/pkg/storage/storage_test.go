@@ -1,12 +1,11 @@
 package storage
 
 import (
-	"context"
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 )
 
@@ -147,7 +146,9 @@ func TestDatabase_createUser(t *testing.T) {
 			require.Equal(t, tt.want, e)
 		})
 	}
-	_, err = db.conn.Exec(context.Background(), "DELETE from users")
+	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("users")
 	require.NoError(t, err)
 }
 
@@ -193,6 +194,65 @@ func TestDatabase_getUser(t *testing.T) {
 			}
 		})
 	}
-	_, err = db.conn.Exec(context.Background(), "DELETE from users")
+	err = db.DeleteContent("orders")
 	require.NoError(t, err)
+	err = db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestDatabase_CreateOrder(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	type args struct {
+		order int
+		user  string
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "valid new order",
+			args: args{
+				order: 12345678,
+				user:  "user1",
+			},
+			want: true,
+		},
+		{
+			name: "Not unique order",
+			args: args{
+				order: 12345678,
+				user:  "user2",
+			},
+			want: false,
+		},
+		{
+			name: "Order already created by user",
+			args: args{
+				order: 12345678,
+				user:  "user1",
+			},
+			want: false,
+		},
+	}
+	db, err := New("postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable")
+	require.NoError(t, err)
+	err = db.CreateUser("user1", "password", "random1")
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := true
+			err := db.CreateOrder(tt.args.order, tt.args.user)
+			if err != nil {
+				e = false
+			}
+			assert.Equal(t, tt.want, e)
+		})
+	}
+	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("users")
+	require.NoError(t, err)
+
 }

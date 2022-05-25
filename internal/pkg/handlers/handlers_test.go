@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/t1mon-ggg/gophermart/internal/pkg/config"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/storage"
@@ -271,5 +272,134 @@ func TestGophermart_postLogin(t *testing.T) {
 		})
 	}
 	err := mart.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestGophermart_postOrder(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	jar, r, mart := newServer(t)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	type args struct {
+		name  string
+		order string
+	}
+	tests := []struct {
+		name  string
+		ctype map[string]string
+		args  args
+		want  int
+	}{
+		{
+			name: "New order",
+			ctype: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			args: args{
+				name:  "user111",
+				order: "12345",
+			},
+			want: http.StatusAccepted,
+		},
+		{
+			name: "Duplicate order by same user",
+			ctype: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			args: args{
+				name:  "user111",
+				order: "12345",
+			},
+			want: http.StatusOK,
+		},
+		{
+			name: "Wrong order format",
+			ctype: map[string]string{
+				"Content-Type": "application/json",
+			},
+			args: args{
+				name:  "user111",
+				order: "12345",
+			},
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "Wrong order format",
+			ctype: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			args: args{
+				name:  "user111",
+				order: "abcd",
+			},
+			want: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "Wrong order format",
+			ctype: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			args: args{
+				name:  "user111",
+				order: "1234.5",
+			},
+			want: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "Duplicate order by another unauthorized user",
+			ctype: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			args: args{
+				name:  "user112",
+				order: "12345",
+			},
+			want: http.StatusUnauthorized,
+		},
+		{
+			name: "Duplicate order by another authorized user",
+			ctype: map[string]string{
+				"Content-Type": "text/plain",
+			},
+			args: args{
+				name:  "user112",
+				order: "12345",
+			},
+			want: http.StatusConflict,
+		},
+	}
+	user := models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body := userReq(t, user.Name, user.Password)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "Duplicate order by another unauthorized user" {
+				jar, _ = cookiejar.New(nil)
+			}
+			if tt.name == "Duplicate order by another authorized user" {
+				user := models.User{
+					Name:     "user112",
+					Password: "password112",
+				}
+				body := userReq(t, user.Name, user.Password)
+				response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+					"Content-Type": "application/json",
+				})
+			}
+			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", tt.args.order, tt.ctype)
+			defer response.Body.Close()
+			assert.Equal(t, tt.want, response.StatusCode)
+		})
+	}
+	err := mart.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = mart.db.DeleteContent("users")
 	require.NoError(t, err)
 }
