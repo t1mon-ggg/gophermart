@@ -205,7 +205,34 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Application in development", http.StatusInternalServerError)
+	user, err := helpers.GetUser(r)
+	log.Debug().Msgf("Get_Order user is %v", user)
+	if err != nil {
+		log.Debug().Msg("Username cookie missing")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	o, err := s.db.GetOrders(user)
+	if err != nil {
+		log.Error().Err(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	log.Debug().Msgf("Get_Orders result is %v", o)
+	if len(o) == 0 {
+		log.Debug().Msg("Orders not found")
+		http.Error(w, "No orders found", http.StatusNoContent)
+		return
+	}
+	body, err := json.Marshal(o)
+	if err != nil {
+		log.Error().Err(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	log.Debug().Msg("Request list of orders complete")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {

@@ -16,7 +16,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"github.com/t1mon-ggg/gophermart/internal/pkg/config"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/storage"
@@ -297,7 +296,7 @@ func TestGophermart_postOrder(t *testing.T) {
 			},
 			args: args{
 				name:  "user111",
-				order: "12345",
+				order: "123455",
 			},
 			want: http.StatusAccepted,
 		},
@@ -308,7 +307,7 @@ func TestGophermart_postOrder(t *testing.T) {
 			},
 			args: args{
 				name:  "user111",
-				order: "12345",
+				order: "123455",
 			},
 			want: http.StatusOK,
 		},
@@ -319,7 +318,7 @@ func TestGophermart_postOrder(t *testing.T) {
 			},
 			args: args{
 				name:  "user111",
-				order: "12345",
+				order: "123455",
 			},
 			want: http.StatusBadRequest,
 		},
@@ -352,7 +351,7 @@ func TestGophermart_postOrder(t *testing.T) {
 			},
 			args: args{
 				name:  "user112",
-				order: "12345",
+				order: "123455",
 			},
 			want: http.StatusUnauthorized,
 		},
@@ -363,7 +362,7 @@ func TestGophermart_postOrder(t *testing.T) {
 			},
 			args: args{
 				name:  "user112",
-				order: "12345",
+				order: "123455",
 			},
 			want: http.StatusConflict,
 		},
@@ -397,6 +396,84 @@ func TestGophermart_postOrder(t *testing.T) {
 			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", tt.args.order, tt.ctype)
 			defer response.Body.Close()
 			assert.Equal(t, tt.want, response.StatusCode)
+		})
+	}
+	err := mart.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = mart.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestGophermart_getOrders(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	jar, r, mart := newServer(t)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	user := models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body := userReq(t, user.Name, user.Password)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", "123455", map[string]string{
+		"Content-Type": "text/plain",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusAccepted, response.StatusCode)
+	tests := []struct {
+		name string
+		user string
+		want []models.Order
+		code int
+	}{
+		{
+			name: "Get valid orders",
+			user: "user1",
+			want: []models.Order{
+				{
+					Number:  123455,
+					Status:  "NEW",
+					AccRual: 0,
+				},
+			},
+			code: http.StatusOK,
+		},
+		{
+			name: "Get unauthorized orders",
+			user: "user2",
+			want: []models.Order{},
+			code: http.StatusUnauthorized,
+		},
+		{
+			name: "Get empty orders",
+			user: "user2",
+			want: []models.Order{},
+			code: http.StatusNoContent,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "Get unauthorized orders" {
+				jar, _ = cookiejar.New(nil)
+			}
+			if tt.name == "Get empty orders" {
+				user := models.User{
+					Name:     "user112",
+					Password: "password112",
+				}
+				body := userReq(t, user.Name, user.Password)
+				response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+					"Content-Type": "application/json",
+				})
+				defer response.Body.Close()
+			}
+			response, _ := testRequest(t, ts, jar, http.MethodGet, "/api/user/orders", "", map[string]string{})
+			defer response.Body.Close()
+			assert.Equal(t, tt.code, response.StatusCode)
 		})
 	}
 	err := mart.db.DeleteContent("orders")

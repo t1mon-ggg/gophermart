@@ -29,6 +29,7 @@ const (
 		"name" text NOT NULL,
 		"status" text NOT NULL DEFAULT 'NEW',
 		"uploaded_at" timestamptz NOT NULL,
+		"accrual" int8 NOT NULL DEFAULT 0,
 		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name"),
 		CONSTRAINT orders_id_pk PRIMARY KEY (id)
 	);
@@ -38,6 +39,7 @@ const (
 	createUser  = `INSERT INTO public.users ("name","password","random_iv") VALUES ($1,$2,$3)`
 	getUser     = `SELECT "password", "random_iv" from "users" where "name" = $1`
 	createOrder = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
+	getOrders   = `SELECT "order", "status", "accrual", "uploaded_at" from "orders" where "name" = $1 ORDER BY "uploaded_at" DESC`
 )
 
 type Database struct {
@@ -108,6 +110,34 @@ func (s *Database) GetUser(login string) (models.User, error) {
 	user.Random = random
 	log.Debug().Msgf("Found user %s with password %s and random %s", user.Name, user.Password, user.Random)
 	return user, nil
+}
+
+func (s *Database) GetOrders(login string) ([]models.Order, error) {
+	orders := make([]models.Order, 0)
+	rows, err := s.conn.Query(context.Background(), getOrders, login)
+	if err != nil {
+		log.Debug().Err(err).Msg("")
+		return orders, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		order := models.Order{}
+		var number int
+		var status string
+		var accrual int
+		var upload time.Time
+		err = rows.Scan(&number, &status, &accrual, &upload)
+		if err != nil {
+			log.Error().Err(err).Msg("Error while reading rows")
+			return orders, err
+		}
+		order.Number = number
+		order.Status = status
+		order.AccRual = accrual
+		order.Upload = upload
+		orders = append(orders, order)
+	}
+	return orders, nil
 }
 
 func (s *Database) CreateOrder(order int, user string) error {
