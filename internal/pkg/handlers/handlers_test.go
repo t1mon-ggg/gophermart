@@ -392,6 +392,7 @@ func TestGophermart_postOrder(t *testing.T) {
 				response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 					"Content-Type": "application/json",
 				})
+				defer response.Body.Close()
 			}
 			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", tt.args.order, tt.ctype)
 			defer response.Body.Close()
