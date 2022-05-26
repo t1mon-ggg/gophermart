@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog/log"
@@ -25,7 +26,9 @@ const (
 	CREATE TABLE IF NOT EXISTS public.orders (
 		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
 		"order" int8 NOT NULL,
-		"name" varchar NOT NULL,
+		"name" text NOT NULL,
+		"status" text NOT NULL DEFAULT 'NEW',
+		"uploaded_at" timestamptz NOT NULL,
 		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name"),
 		CONSTRAINT orders_id_pk PRIMARY KEY (id)
 	);
@@ -34,7 +37,7 @@ const (
 	`
 	createUser  = `INSERT INTO public.users ("name","password","random_iv") VALUES ($1,$2,$3)`
 	getUser     = `SELECT "password", "random_iv" from "users" where "name" = $1`
-	createOrder = `INSERT INTO public.orders ("order","name") VALUES ($1,$2)`
+	createOrder = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
 )
 
 type Database struct {
@@ -108,7 +111,7 @@ func (s *Database) GetUser(login string) (models.User, error) {
 }
 
 func (s *Database) CreateOrder(order int, user string) error {
-	_, err := s.conn.Exec(context.Background(), createOrder, order, user)
+	_, err := s.conn.Exec(context.Background(), createOrder, order, user, time.Now())
 	if err != nil {
 		log.Debug().Err(err).Msg("")
 		return err

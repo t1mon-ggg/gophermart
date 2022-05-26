@@ -59,7 +59,7 @@ func (s *Gophermart) Router(r chi.Router) {
 	r.Post("/api/user/balance/withdraw", s.postBalanceWithdraw) //Authorized only
 	r.Get("/api/user/balance/withdraw", s.getBalanceWithdraw)   //Authorized only
 	r.MethodNotAllowed(otherHandler)                            //All users
-	r.NotFound(otherHandler)
+	r.NotFound(otherHandler)                                    //All users
 }
 
 func otherHandler(w http.ResponseWriter, r *http.Request) {
@@ -176,6 +176,10 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	order, err := strconv.Atoi(string(body))
 	if err != nil {
 		log.Error().Err(err).Msg("Incorrect number format")
+		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
+		return
+	}
+	if !helpers.CheckOrder(body) {
 		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
 		return
 	}

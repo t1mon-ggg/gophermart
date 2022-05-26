@@ -12,6 +12,8 @@ import (
 	"strings"
 
 	"github.com/jackc/pgconn"
+	"github.com/neonxp/checksum"
+	"github.com/neonxp/checksum/luhn"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -191,4 +193,21 @@ func GetUser(r *http.Request) (string, error) {
 	username := cookie.Value
 	log.Debug().Msgf("Username from cookie is %v", username)
 	return username, nil
+}
+
+func CheckOrder(s []byte) bool {
+	str := string(s)
+	err := luhn.Check(str)
+	if err != nil {
+		switch err {
+		case checksum.ErrInvalidNumber:
+			log.Error().Msg("Invalid order number")
+			return false
+		case checksum.ErrInvalidChecksum:
+			log.Error().Msg("Invalid order checksum")
+			return false
+		}
+	}
+	log.Info().Msg("Order number is valid")
+	return true
 }

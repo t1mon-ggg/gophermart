@@ -20,8 +20,8 @@ type Config struct {
 func New() *Config {
 	s := Config{
 		DBPath:    "postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable",
-		Bind:      "127.0.0.1:8080",
-		AccSystem: "",
+		Bind:      "127.0.0.1:8081",
+		AccSystem: "http://127.0.0.1:8080",
 	}
 	err := s.readEnv()
 	if err != nil {

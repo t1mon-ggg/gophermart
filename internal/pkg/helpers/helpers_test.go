@@ -172,3 +172,28 @@ func TestCompareCookie(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckOrder(t *testing.T) {
+	tests := []struct {
+		name  string
+		order string
+		want  bool
+	}{
+		{
+			name:  "Valid order",
+			order: "123455",
+			want:  true,
+		},
+		{
+			name:  "Invalid order",
+			order: "123445",
+			want:  false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := CheckOrder([]byte(tt.order))
+			require.Equal(t, tt.want, result)
+		})
+	}
+}
