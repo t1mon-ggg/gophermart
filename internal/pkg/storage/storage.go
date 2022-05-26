@@ -20,6 +20,7 @@ const (
 		"name" varchar NOT NULL UNIQUE,
 		"password" varchar NOT NULL,
 		"random_iv" varchar NOT NULL,
+		"balance" int8 NOT NULL DEFAULT 0,
 		CONSTRAINT users_id_pk PRIMARY KEY (id)
 	);
 
@@ -156,7 +157,7 @@ func (s *Database) DeleteContent(table string) error {
 		log.Error().Err(err).Msgf("Error while cleaning table %s", table)
 		return err
 	}
-	log.Debug().Msgf("Table %s clean", table)
+	log.Debug().Msgf("Table %s is clean", table)
 	return nil
 }
 

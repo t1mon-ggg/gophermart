@@ -9,6 +9,7 @@ type User struct {
 	Name     string `json:"login"`    //Unique user name
 	Password string `json:"password"` //Hashed password
 	Random   string `json:"-"`        //Random IV
+	Balance  int    `json:"-"`        //Accrual balace
 }
 
 type Order struct {

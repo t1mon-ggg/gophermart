@@ -231,6 +231,7 @@ func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Debug().Msg("Request list of orders complete")
+	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
 }
