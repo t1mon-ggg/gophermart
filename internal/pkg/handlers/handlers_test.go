@@ -388,10 +388,10 @@ func TestGophermart_postOrder(t *testing.T) {
 					Password: "password112",
 				}
 				body := userReq(t, user.Name, user.Password)
-				response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+				reg, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 					"Content-Type": "application/json",
 				})
-				defer response.Body.Close()
+				defer reg.Body.Close()
 			}
 			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", tt.args.order, tt.ctype)
 			defer response.Body.Close()
