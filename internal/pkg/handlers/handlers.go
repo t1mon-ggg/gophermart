@@ -241,7 +241,7 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	}
 	answer := b{}
 	user, err := helpers.GetUser(r)
-	log.Debug().Msgf("Get_Order user is %v", user)
+	log.Debug().Msgf("Get_Balance user is %v", user)
 	if err != nil {
 		log.Debug().Msg("Username cookie missing")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -253,8 +253,9 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	log.Debug().Msgf("User's %v balance is %v and withdrawn is %v", user, balance, withdrawn)
 	if balance == 0 && withdrawn == 0 {
-		log.Error().Err(err)
+		log.Info().Msg("Transactions not found")
 		http.Error(w, "Transactions not found", http.StatusNoContent)
 		return
 	}

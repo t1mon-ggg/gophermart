@@ -10,10 +10,10 @@ import (
 )
 
 func main() {
+	app := handlers.NewGopherMart()
 	//remove in prod
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	//
-	app := handlers.NewGopherMart()
 
 	r := chi.NewRouter()
 
