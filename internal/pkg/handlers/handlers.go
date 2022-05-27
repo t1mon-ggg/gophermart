@@ -176,11 +176,6 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug().Msgf("Recieved body %s", string(body))
 	order := string(body)
-	if err != nil {
-		log.Error().Err(err).Msg("Incorrect number format")
-		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
-		return
-	}
 	if !helpers.CheckOrder(body) {
 		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
 		return
