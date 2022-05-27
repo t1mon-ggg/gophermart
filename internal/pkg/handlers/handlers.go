@@ -235,7 +235,41 @@ func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Application in development", http.StatusInternalServerError)
+	type b struct {
+		Balance   float32 `json:"balance"`
+		Withdrawn float32 `json:"withdrawn"`
+	}
+	answer := b{}
+	user, err := helpers.GetUser(r)
+	log.Debug().Msgf("Get_Order user is %v", user)
+	if err != nil {
+		log.Debug().Msg("Username cookie missing")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	balance, withdrawn, err := s.db.GetBalance(user)
+	if err != nil {
+		log.Error().Err(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if balance == 0 && withdrawn == 0 {
+		log.Error().Err(err)
+		http.Error(w, "Transactions not found", http.StatusNoContent)
+		return
+	}
+	answer.Balance = balance
+	answer.Withdrawn = withdrawn
+	body, err := json.Marshal(answer)
+	if err != nil {
+		log.Error().Err(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	log.Debug().Msg("Request user's balance complete")
+	w.Header().Add("Content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
