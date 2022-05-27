@@ -192,7 +192,7 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 	balance += accrual
 	if balance < 0 {
 		log.Error().Msg("Balance is not enough")
-		return errors.New("We need to build more ziggurats")
+		return errors.New("we need to build more ziggurats")
 	}
 	log.Debug().Msgf("Updating balance for user %v with new balance %v", login, balance)
 	_, err = s.conn.Exec(context.Background(), updateBalance, balance, login)
