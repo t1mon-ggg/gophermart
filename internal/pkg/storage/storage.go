@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -18,16 +19,17 @@ const (
 	dbSchema = `
 	CREATE TABLE IF NOT EXISTS users (
 		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
-		"name" varchar NOT NULL UNIQUE,
-		"password" varchar NOT NULL,
-		"random_iv" varchar NOT NULL,
+		"name" text NOT NULL UNIQUE,
+		"password" text NOT NULL,
+		"random_iv" text NOT NULL,
 		"balance" float8 NOT NULL DEFAULT 0,
+		"withdrawn" float8 NOT NULL DEFAULT 0,
 		CONSTRAINT users_id_pk PRIMARY KEY (id)
 	);
 
 	CREATE TABLE IF NOT EXISTS public.orders (
 		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
-		"order" int8 NOT NULL,
+		"order" text NOT NULL,
 		"name" text NOT NULL,
 		"status" text NOT NULL DEFAULT 'NEW',
 		"uploaded_at" timestamptz NOT NULL,
@@ -42,9 +44,9 @@ const (
 	getUser       = `SELECT "password", "random_iv" from "users" where "name" = $1`
 	createOrder   = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
 	getOrders     = `SELECT "order", "status", "accrual", "uploaded_at" from "orders" where "name" = $1 ORDER BY "uploaded_at" DESC`
-	getBalance    = `SELECT "balance" from "users" where "name" = $1`
+	getBalance    = `SELECT "balance", "withdrawn" from "users" where "name" = $1`
 	updateOrder   = `UPDATE public.orders SET status=$1, accrual=$2	WHERE "order" = $3`
-	updateBalance = `UPDATE public.users SET balance=$1 WHERE "name" = $2`
+	updateBalance = `UPDATE public.users SET balance=$1, withdrawn=$2 WHERE "name" = $3`
 )
 
 type Database struct {
@@ -132,7 +134,7 @@ func (s *Database) GetOrders(login string) ([]models.Order, error) {
 	defer rows.Close()
 	for rows.Next() {
 		order := models.Order{}
-		var number int
+		var number string
 		var status string
 		var accrual float32
 		var upload time.Time
@@ -150,7 +152,7 @@ func (s *Database) GetOrders(login string) ([]models.Order, error) {
 	return orders, nil
 }
 
-func (s *Database) CreateOrder(order int, user string) error {
+func (s *Database) CreateOrder(order, user string) error {
 	log.Debug().Msgf("Creating new order %v", order)
 	_, err := s.conn.Exec(context.Background(), createOrder, order, user, time.Now())
 	if err != nil {
@@ -161,7 +163,7 @@ func (s *Database) CreateOrder(order int, user string) error {
 	return nil
 }
 
-func (s *Database) UpdateOrder(order int, status string, accrual float32) error {
+func (s *Database) UpdateOrder(order, status string, accrual float32) error {
 	log.Debug().Msgf("Updating order %v with new status %v and accrual value %v", order, status, accrual)
 	_, err := s.conn.Exec(context.Background(), updateOrder, status, accrual, order)
 	if err != nil {
@@ -172,19 +174,20 @@ func (s *Database) UpdateOrder(order int, status string, accrual float32) error 
 	return nil
 }
 
-func (s *Database) GetBalance(login string) (float32, error) {
+func (s *Database) GetBalance(login string) (float32, float32, error) {
 	var balance float32
+	var withdrawn float32
 	log.Debug().Msgf("Requesting balance for user %v", login)
-	err := s.conn.QueryRow(context.Background(), getBalance, login).Scan(&balance)
+	err := s.conn.QueryRow(context.Background(), getBalance, login).Scan(&balance, &withdrawn)
 	if err != nil {
 		log.Debug().Err(err).Msg("")
-		return 0, err
+		return 0, 0, err
 	}
-	return balance, nil
+	return balance, withdrawn, nil
 }
 
 func (s *Database) UpdateBalance(login string, accrual float32) error {
-	balance, err := s.GetBalance(login)
+	balance, withdraw, err := s.GetBalance(login)
 	if err != nil {
 		log.Error().Err(err).Msg("Error in get user balance request")
 		return err
@@ -194,8 +197,11 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 		log.Error().Msg("Balance is not enough")
 		return errors.New("we need to build more ziggurats")
 	}
+	if accrual < 0 {
+		withdraw += float32(math.Abs(float64(accrual)))
+	}
 	log.Debug().Msgf("Updating balance for user %v with new balance %v", login, balance)
-	_, err = s.conn.Exec(context.Background(), updateBalance, balance, login)
+	_, err = s.conn.Exec(context.Background(), updateBalance, balance, withdraw, login)
 	if err != nil {
 		log.Debug().Err(err).Msg("Error in update user balance request")
 		return err

@@ -13,7 +13,7 @@ type User struct {
 }
 
 type Order struct {
-	Number  int       `json:"number"`            //Unique order number
+	Number  string    `json:"number"`            //Unique order number
 	Status  string    `json:"status"`            //Order status. Availible states: NEW, PROCESSING, INVALID, PROCESSED
 	AccRual float32   `json:"accrual,omitempty"` //Calculated bonus value
 	Upload  time.Time `json:"uploaded_at"`       //Order time. Time in format RFC3339

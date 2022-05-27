@@ -439,8 +439,8 @@ func TestGophermart_getOrders(t *testing.T) {
 			user: "user1",
 			want: []models.Order{
 				{
-					Number:  123455,
-					Status:  "NEW",
+					Number:  "123455",
+					Status:  "PROCESSED",
 					AccRual: 0,
 				},
 			},
@@ -539,12 +539,12 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 	tests := []struct {
 		name  string
 		login string
-		order int
+		order string
 	}{
 		{
 			name:  "Valid order",
 			login: "user111",
-			order: 123455,
+			order: "123455",
 		},
 	}
 	for _, tt := range tests {

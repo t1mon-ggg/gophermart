@@ -203,7 +203,7 @@ func TestDatabase_getUser(t *testing.T) {
 func TestDatabase_CreateOrder(t *testing.T) {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	type args struct {
-		order int
+		order string
 		user  string
 	}
 	tests := []struct {
@@ -214,7 +214,7 @@ func TestDatabase_CreateOrder(t *testing.T) {
 		{
 			name: "valid new order",
 			args: args{
-				order: 12345678,
+				order: "12345678",
 				user:  "user1",
 			},
 			want: true,
@@ -222,7 +222,7 @@ func TestDatabase_CreateOrder(t *testing.T) {
 		{
 			name: "Not unique order",
 			args: args{
-				order: 12345678,
+				order: "12345678",
 				user:  "user2",
 			},
 			want: false,
@@ -230,7 +230,7 @@ func TestDatabase_CreateOrder(t *testing.T) {
 		{
 			name: "Order already created by user",
 			args: args{
-				order: 12345678,
+				order: "12345678",
 				user:  "user1",
 			},
 			want: false,

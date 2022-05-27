@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi"
@@ -176,7 +175,7 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Debug().Msgf("Recieved body %s", string(body))
-	order, err := strconv.Atoi(string(body))
+	order := string(body)
 	if err != nil {
 		log.Error().Err(err).Msg("Incorrect number format")
 		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
@@ -311,7 +310,7 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Gophermart) AccrualAPI(login string, order int) {
+func (s *Gophermart) AccrualAPI(login, order string) {
 	/*
 		Accrual answer example
 
@@ -331,7 +330,7 @@ func (s *Gophermart) AccrualAPI(login string, order int) {
 		Val    float32 `json:"accrual,omitempty"` //Calculated accrual value.
 	}
 	var acc accrual
-	url := fmt.Sprintf("%s/api/orders/%d", s.Config.AccSystem, order)
+	url := fmt.Sprintf("%s/api/orders/%s", s.Config.AccSystem, order)
 	log.Debug().Msgf("Actual accrual system request is '%s'", url)
 	client := http.Client{}
 	request, err := http.NewRequest(http.MethodGet, url, bytes.NewReader([]byte{}))
