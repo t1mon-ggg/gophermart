@@ -4,16 +4,20 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/config"
@@ -28,7 +32,7 @@ func newServer(t *testing.T) (*cookiejar.Jar, *chi.Mux, *Gophermart) {
 		Config: &config.Config{
 			Bind:      "",
 			DBPath:    "postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable",
-			AccSystem: "",
+			AccSystem: "http://127.0.0.1:8080",
 		},
 	}
 	s, err := storage.New(mart.Config.DBPath)
@@ -388,10 +392,10 @@ func TestGophermart_postOrder(t *testing.T) {
 					Password: "password112",
 				}
 				body := userReq(t, user.Name, user.Password)
-				reg, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+				response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 					"Content-Type": "application/json",
 				})
-				defer reg.Body.Close()
+				defer response.Body.Close()
 			}
 			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", tt.args.order, tt.ctype)
 			defer response.Body.Close()
@@ -479,5 +483,85 @@ func TestGophermart_getOrders(t *testing.T) {
 	err := mart.db.DeleteContent("orders")
 	require.NoError(t, err)
 	err = mart.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func testaccrualrequests(t *testing.T, config *config.Config) {
+	urlGoods := fmt.Sprintf("%s/%s", config.AccSystem, "api/goods")
+	urlOrders := fmt.Sprintf("%s/%s", config.AccSystem, "api/orders")
+	bodyGoods := `{ "match": "LG", "reward": 5, "reward_type": "%" }`
+	bodyOrders := `{ "order": "123455", "goods": [ { "description": "LG Monitor", "price": 50000.0 } ] }`
+	client := http.Client{}
+	reqGoods, err := http.NewRequest(http.MethodPost, urlGoods, bytes.NewReader([]byte(bodyGoods)))
+	require.NoError(t, err)
+	reqGoods.Header.Add("Content-Type", "application/json")
+	response, err := client.Do(reqGoods)
+	require.NoError(t, err)
+	log.Debug().Msg("Goods request completed")
+	defer response.Body.Close()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+
+	reqOrders, err := http.NewRequest(http.MethodPost, urlOrders, bytes.NewReader([]byte(bodyOrders)))
+	require.NoError(t, err)
+	reqOrders.Header.Add("Content-Type", "application/json")
+	response, err = client.Do(reqOrders)
+	require.NoError(t, err)
+	log.Debug().Msg("Orders request completed")
+	defer response.Body.Close()
+	require.Equal(t, http.StatusAccepted, response.StatusCode)
+}
+
+func TestGophermart_AccrualAPI(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
+	err := cmd.Start()
+	require.NoError(t, err)
+	time.Sleep(10 * time.Second)
+	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
+	jar, r, s := newServer(t)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	user := models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body := userReq(t, user.Name, user.Password)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", "123455", map[string]string{"Content-type": "text/plain"})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusAccepted, response.StatusCode)
+	testaccrualrequests(t, s.Config)
+	defer cmd.Process.Kill()
+	tests := []struct {
+		name  string
+		login string
+		order int
+	}{
+		{
+			name:  "Valid order",
+			login: "user111",
+			order: 123455,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s.AccrualAPI(tt.login, tt.order)
+			orders, _ := s.db.GetOrders(tt.login)
+			for _, order := range orders {
+				status := false
+				if order.Status == "INVALID" || order.Status == "PROCESSED" {
+					status = true
+				}
+				require.True(t, status)
+			}
+		})
+	}
+	err = s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
 	require.NoError(t, err)
 }

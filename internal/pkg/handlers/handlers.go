@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi"
 	chiMiddleware "github.com/go-chi/chi/middleware"
@@ -202,6 +205,7 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Order accepted"))
+	go s.AccrualAPI(user, order)
 }
 
 func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
@@ -305,4 +309,74 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		}
 	})
+}
+
+func (s *Gophermart) AccrualAPI(login string, order int) {
+	/*
+		Accrual answer example
+
+			200 OK HTTP/1.1
+		  Content-Type: application/json
+		  ...
+
+		  {
+		      "order": "<number>",
+		      "status": "PROCESSED",
+		      "accrual": 500
+		  }
+	*/
+	type accrual struct {
+		Order  string  `json:"order"`             //Order number.
+		Status string  `json:"status"`            //Order status. Allowed values are "REGISTERED", "INVALID", "PROCESSING", "PROCESSED". Status "INVALID" or "PROCESSED" are final.
+		Val    float32 `json:"accrual,omitempty"` //Calculated accrual value.
+	}
+	var acc accrual
+	url := fmt.Sprintf("%s/api/orders/%d", s.Config.AccSystem, order)
+	log.Debug().Msgf("Actual accrual system request is '%s'", url)
+	client := http.Client{}
+	request, err := http.NewRequest(http.MethodGet, url, bytes.NewReader([]byte{}))
+	if err != nil {
+		log.Error().Err(err).Msg("Error in creating request to accrual system")
+		return
+	}
+	var wait bool
+	for !wait {
+		response, err := client.Do(request)
+		if err != nil {
+			log.Error().Err(err).Msg("Error in request to accrual system")
+			return
+		}
+		defer response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			log.Debug().Msgf("Status code not 200. Recieved code %d", response.StatusCode)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		body, err := io.ReadAll(response.Body)
+		if err != nil {
+			log.Error().Err(err)
+		}
+		log.Debug().Msgf("Recieved json is %v", string(body))
+		err = json.Unmarshal(body, &acc)
+		if err != nil {
+			log.Error().Err(err).Msg("Error in unmarshaling answer from accrual system")
+		}
+		time.Sleep(5 * time.Second)
+		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
+			wait = true
+		}
+	}
+	if acc.Status == "INVALID" {
+		acc.Val = 0
+	}
+	err = s.db.UpdateOrder(order, acc.Status, acc.Val)
+	if err != nil {
+		log.Error().Err(err)
+		return
+	}
+	err = s.db.UpdateBalance(login, acc.Val)
+	if err != nil {
+		log.Error().Err(err)
+		return
+	}
 }
