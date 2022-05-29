@@ -94,6 +94,7 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
+	sublog.Debug().Msgf("Parsed from json. Name: %v, Password: %v", newuser.Name, newuser.Password)
 	if newuser.Name == "" || newuser.Password == "" {
 		sublog.Error().Err(err).Msg("Wrong user data")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
@@ -143,6 +144,7 @@ func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
+	sublog.Debug().Msgf("Parsed from json. Login: %v, Password: %v", user.Name, user.Password)
 	u, err := s.db.GetUser(user.Name)
 	if err != nil {
 		if helpers.EmptyRow(err) {
@@ -504,6 +506,7 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 		if err != nil {
 			subsublog.Error().Err(err).Msg("Error in unmarshaling answer from accrual system")
 		}
+		sublog.Debug().Msgf("Parsed from json. Order: %v, Status: %v, Accrual: %v", acc.Order, acc.Status, acc.Val)
 		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
 			subsublog.Debug().Msg("Accrual calculation in progress. Waiting for 1 seeconds to the next try")
 			wait = true
