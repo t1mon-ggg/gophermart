@@ -43,7 +43,7 @@ const (
 		"order" text NOT NULL,
 		"processed_at"  timestamptz,
 		"withdrawn" float8 NOT NULL DEFAULT 0,
-		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name"),
+		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name")
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_user_idx ON public.orders ("order","name");
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_idx ON public.orders ("order");
