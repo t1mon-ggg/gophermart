@@ -451,6 +451,7 @@ func TestDatabase_getWithdraws(t *testing.T) {
 	err = db.UpdateBalance("user111", 5000)
 	require.NoError(t, err)
 	err = db.CreateWithdraw(1000, "user111", "123455")
+	require.NoError(t, err)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := db.GetWithdraws(tt.user)
