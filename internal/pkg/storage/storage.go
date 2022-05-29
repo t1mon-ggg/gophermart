@@ -55,15 +55,16 @@ const (
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_idx ON public.orders ("order");
 	CREATE UNIQUE INDEX IF NOT EXISTS withdrawns_order_idx ON public.withdrawns ("order", "name");
 	`
-	createUser      = `INSERT INTO public.users ("name","password","random_iv") VALUES ($1,$2,$3)`
-	getUser         = `SELECT "password", "random_iv" from "users" where "name" = $1`
-	createOrder     = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
-	getOrders       = `SELECT "order", "status", "accrual", "uploaded_at" from "orders" where "name" = $1 ORDER BY "uploaded_at" DESC`
-	getBalance      = `SELECT "balance", "withdrawn" from "balance" where "name" = $1`
-	updateOrder     = `UPDATE public.orders SET status=$1, accrual=$2 WHERE "order" = $3`
-	updateBalance   = `UPDATE public.balance SET balance=$1, withdrawn=$2 WHERE "name" = $3`
-	createWithdrawn = `INSERT INTO public.withdrawns ("name", "order", "processed_at", "withdrawn")  = $1, processed_at = $2  WHERE "order" = $3 AND "name" = $4`
-	getWithdrawns   = `SELECT "order", "withdrawn", "processed_at" from "withdrawns" where "name" = $1 ORDER BY "processed_at" DESC`
+	createUser        = `INSERT INTO public.users ("name","password","random_iv") VALUES ($1,$2,$3)`
+	createUserBalance = `INSERT INTO public.balance ("name") VALUES ($1)`
+	getUser           = `SELECT "password", "random_iv" from public.users where "name" = $1`
+	createOrder       = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
+	getOrders         = `SELECT "order", "status", "accrual", "uploaded_at" from public.orders where "name" = $1 ORDER BY "uploaded_at" DESC`
+	getBalance        = `SELECT "balance", "withdrawn" FROM public.balance where "name" = $1`
+	updateOrder       = `UPDATE public.orders SET status=$1, accrual=$2 WHERE "order" = $3`
+	updateBalance     = `UPDATE public.balance SET balance=$1, withdrawn=$2 WHERE "name" = $3`
+	createWithdrawn   = `INSERT INTO public.withdrawns ("name", "order", "processed_at", "withdrawn")  = $1, processed_at = $2  WHERE "order" = $3 AND "name" = $4`
+	getWithdrawns     = `SELECT "order", "withdrawn", "processed_at" FROM public.withdrawns WHERE "name" = $1 ORDER BY "processed_at" DESC`
 )
 
 type Database struct {
@@ -121,6 +122,11 @@ func (s *Database) CreateUser(login, password, v string) error {
 		return err
 	}
 	sublog.Info().Msgf("User with name '%s' created", login)
+	_, err = s.conn.Exec(context.Background(), createUserBalance, login)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return err
+	}
 	return nil
 }
 
