@@ -316,13 +316,14 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	sublog.Debug().Msgf("Recieved body: %v", string(body))
 	err = json.Unmarshal(body, &w)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error while parsing JSON body")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
-	sublog.Debug().Msgf("Recived")
+	sublog.Debug().Msgf("Parsed order %v and sum %v", a.Number, a.Sum)
 	if !helpers.CheckOrder([]byte(a.Number)) {
 		sublog.Info().Msg("Wrong order number")
 		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
