@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
@@ -216,6 +217,13 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error in update user balance request")
 		return err
+	}
+	if log.Logger.GetLevel() == zerolog.DebugLevel {
+		balance, withdrawns, err := s.GetBalance(login)
+		if err != nil {
+			sublog.Debug().Err(err)
+		}
+		sublog.Debug().Msgf("Result. Balance - %v, Withdrawns - %v", balance, withdrawns)
 	}
 	sublog.Info().Msgf("User %v updated", login)
 	return nil
