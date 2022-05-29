@@ -254,11 +254,6 @@ func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 
 func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing request of a balance")
-	type b struct {
-		Balance   float32 `json:"current"`
-		Withdrawn float32 `json:"withdrawn"`
-	}
-	answer := b{}
 	user, err := helpers.GetUser(r)
 	if err != nil {
 		sublog.Info().Msg("Username not recognized")
@@ -266,21 +261,19 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sublog.Debug().Msgf("Get_Balance user is %v", user)
-	balance, withdrawn, err := s.db.GetBalance(user)
+	balance, err := s.db.GetBalance(user)
 	if err != nil {
 		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	sublog.Debug().Msgf("User's %v balance is %v and withdrawn is %v", user, balance, withdrawn)
-	if balance == 0 && withdrawn == 0 {
+	sublog.Debug().Msgf("User's %v balance is %v and withdrawn is %v", user, balance.Balance, balance.Withdrawns)
+	if balance.Balance == 0 && balance.Withdrawns == 0 {
 		sublog.Info().Msg("Transactions not found")
 		http.Error(w, "Transactions not found", http.StatusNoContent)
 		return
 	}
-	answer.Balance = balance
-	answer.Withdrawn = withdrawn
-	body, err := json.Marshal(answer)
+	body, err := json.Marshal(balance)
 	if err != nil {
 		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -331,17 +324,6 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
 		return
 	}
-	// uOrders, err := s.db.GetOrders(user)
-	// if err != nil {
-	// 	sublog.Info().Msg("Error in request user's orders")
-	// 	http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
-	// 	return
-	// }
-	// if !helpers.WithdrawnError(uOrders, a.Number) {
-	// 	sublog.Info().Msg("User and order number missmatch")
-	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	// 	return
-	// }
 	err = s.db.UpdateWithdrawn(a.Sum, user, a.Number)
 	if err != nil {
 		if helpers.BalanceTooLow(err) {
