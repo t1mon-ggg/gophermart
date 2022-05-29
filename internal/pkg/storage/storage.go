@@ -232,13 +232,10 @@ func (s *Database) UpdateWithdrawn(sum float32, login, order string) error {
 		sublog.Info().Msg("Update balance failed")
 		return err
 	}
-	g, err := s.conn.Exec(context.Background(), updateWithdrawn, sum, time.Now(), order, login)
+	_, err = s.conn.Exec(context.Background(), updateWithdrawn, sum, time.Now(), order, login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("")
 		return err
-	}
-	if g.RowsAffected() == 0 {
-		return errors.New("invalid order number")
 	}
 	sublog.Info().Msg("Update orders withdrawn complete")
 	return nil

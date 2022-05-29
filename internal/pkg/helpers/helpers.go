@@ -15,6 +15,7 @@ import (
 	"github.com/neonxp/checksum"
 	"github.com/neonxp/checksum/luhn"
 	"github.com/rs/zerolog/log"
+	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -222,7 +223,11 @@ func BalanceTooLow(err error) bool {
 	return err.Error() == "we need to build more ziggurats"
 }
 
-func WithdrawnError(err error) bool {
-	sublog.Debug().Msg("Check zero affected rows error")
-	return err.Error() == "invalid order number"
+func WithdrawnError(s []models.Order, number string) bool {
+	for _, order := range s {
+		if order.Number == number {
+			return true
+		}
+	}
+	return false
 }
