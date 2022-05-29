@@ -284,6 +284,7 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	sublog.Debug().Msgf("Balance JSON: %v", string(body))
 	sublog.Info().Msg("Request of user's balance complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
