@@ -213,7 +213,7 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Order successfully created")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Order accepted"))
-	go s.AccrualAPI(user, order)
+	go s.accrualAPI(user, order)
 }
 
 //getBalance - handling/api/user/orders on method GET
@@ -265,12 +265,7 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	sublog.Debug().Msgf("User's %v balance is %v and withdrawn is %v", user, balance.Balance, balance.Withdrawns)
-	if balance.Balance == 0 && balance.Withdrawns == 0 {
-		sublog.Info().Msg("Transactions not found")
-		http.Error(w, "Transactions not found", http.StatusNoContent)
-		return
-	}
+	sublog.Debug().Msgf("User's %v balance is %v and withdraw is %v", user, balance.Balance, balance.Withdraws)
 	body, err := json.Marshal(balance)
 	if err != nil {
 		sublog.Error().Err(err)
@@ -323,7 +318,7 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
 		return
 	}
-	err = s.db.UpdateWithdrawn(a.Sum, user, a.Number)
+	err = s.db.CreateWithdraw(a.Sum, user, a.Number)
 	if err != nil {
 		if helpers.BalanceTooLow(err) {
 			sublog.Info().Msg("Not enough bonuses on the balance")
@@ -338,37 +333,38 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 
 //getBalanceWithdraw - handling/api/user/balance/withdraw on method GET
 func (s *Gophermart) getBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
-	sublog.Info().Msg("Processing request of a withdrawns")
+	sublog.Info().Msg("Processing request of a withdraws")
 	user, err := helpers.GetUser(r)
 	if err != nil {
 		sublog.Info().Msg("Username not recognized")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	sublog.Debug().Msgf("Get_Withdrawns for %v", user)
-	withdrawns, err := s.db.GetWithdrawns(user)
+	sublog.Debug().Msgf("Get_Withdraws for %v", user)
+	withdraws, err := s.db.GetWithdraws(user)
 	if err != nil {
 		if helpers.EmptyRow(err) {
-			sublog.Info().Msg("Withdrawns not found")
-			http.Error(w, "Withdrawns not found", http.StatusNoContent)
+			sublog.Info().Msg("Withdraws not found")
+			http.Error(w, "Withdraws not found", http.StatusNoContent)
 			return
 		}
-		sublog.Info().Msg("Error in requsting withdrawns")
+		sublog.Info().Msg("Error in requsting withdraws")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	if len(withdrawns) == 0 {
-		sublog.Info().Msg("Withdrawns not found")
-		http.Error(w, "Withdrawns not found", http.StatusNoContent)
+	if len(withdraws) == 0 {
+		sublog.Info().Msg("Withdraws not found")
+		http.Error(w, "Withdraws not found", http.StatusNoContent)
 		return
 	}
-	body, err := json.Marshal(withdrawns)
+	log.Debug().Msgf("Withdraws for %v: %v", user, withdraws)
+	body, err := json.Marshal(withdraws)
 	if err != nil {
 		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	sublog.Info().Msg("Request of user's withdrawns complete")
+	sublog.Info().Msg("Request of user's withdraws complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
@@ -442,7 +438,7 @@ func (s *Gophermart) authChecker(next http.Handler) http.Handler {
 	})
 }
 
-func (s *Gophermart) AccrualAPI(login, order string) {
+func (s *Gophermart) accrualAPI(login, order string) {
 	subsublog := sublog.With().Str("subcomponent", "accrual api").Logger()
 	subsublog.Info().Msg("Processing new order withh accrual service.")
 	acc := models.Accrual{}

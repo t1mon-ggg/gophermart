@@ -29,7 +29,7 @@ const (
 		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
 		"name" text NOT NULL UNIQUE,
 		"balance" float8 NOT NULL DEFAULT 0,
-		"withdrawn" float8 NOT NULL DEFAULT 0,
+		"withdraw" float8 NOT NULL DEFAULT 0,
 		CONSTRAINT balance_id_pk PRIMARY KEY (id)
 	);
 
@@ -43,28 +43,29 @@ const (
 		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name"),
 		CONSTRAINT orders_id_pk PRIMARY KEY (id)
 	);
-	CREATE TABLE IF NOT EXISTS public.withdrawns (
+	CREATE TABLE IF NOT EXISTS public.withdraws (
 		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
 		"name" text NOT NULL,
 		"order" text NOT NULL,
 		"processed_at"  timestamptz,
-		"withdrawn" float8 NOT NULL DEFAULT 0,
-		CONSTRAINT withdrawns_fk FOREIGN KEY (name) REFERENCES public.users("name")
+		"withdraw" float8 NOT NULL DEFAULT 0,
+		CONSTRAINT withdraws_fk FOREIGN KEY (name) REFERENCES public.users("name")
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_user_idx ON public.orders ("order","name");
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_idx ON public.orders ("order");
-	CREATE UNIQUE INDEX IF NOT EXISTS withdrawns_order_idx ON public.withdrawns ("order", "name");
+	CREATE UNIQUE INDEX IF NOT EXISTS withdraws_user_order_idx ON public.withdraws ("order", "name");
+	CREATE UNIQUE INDEX IF NOT EXISTS withdraws_order_idx ON public.withdraws ("order");
 	`
 	createUser        = `INSERT INTO public.users ("name","password","random_iv") VALUES ($1,$2,$3)`
 	createUserBalance = `INSERT INTO public.balance ("name") VALUES ($1)`
 	getUser           = `SELECT "password", "random_iv" from public.users where "name" = $1`
 	createOrder       = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
 	getOrders         = `SELECT "order", "status", "accrual", "uploaded_at" from public.orders where "name" = $1 ORDER BY "uploaded_at" DESC`
-	getBalance        = `SELECT "balance", "withdrawn" FROM public.balance where "name" = $1`
+	getBalance        = `SELECT "balance", "withdraw" FROM public.balance where "name" = $1`
 	updateOrder       = `UPDATE public.orders SET status=$1, accrual=$2 WHERE "order" = $3`
-	updateBalance     = `UPDATE public.balance SET balance=$1, withdrawn=$2 WHERE "name" = $3`
-	createWithdrawn   = `INSERT INTO public.withdrawns ("name", "order", "processed_at", "withdrawn")  = $1, processed_at = $2  WHERE "order" = $3 AND "name" = $4`
-	getWithdrawns     = `SELECT "order", "withdrawn", "processed_at" FROM public.withdrawns WHERE "name" = $1 ORDER BY "processed_at" DESC`
+	updateBalance     = `UPDATE public.balance SET balance=$1, withdraw=$2 WHERE "name" = $3`
+	createWithdraw    = `INSERT INTO public.withdraws ("name", "order", "processed_at", "withdraw")  VALUES ($1,$2,$3,$4)`
+	getWithdraws      = `SELECT "order", "withdraw", "processed_at" FROM public.withdraws WHERE "name" = $1 ORDER BY "processed_at" DESC`
 )
 
 type Database struct {
@@ -212,7 +213,7 @@ func (s *Database) GetBalance(login string) (models.Balance, error) {
 		return balance, err
 	}
 	balance.Balance = b
-	balance.Withdrawns = w
+	balance.Withdraws = w
 	return balance, nil
 }
 
@@ -231,10 +232,10 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 		return errors.New("we need to build more ziggurats")
 	}
 	if accrual < 0 {
-		balance.Withdrawns += float32(math.Abs(float64(accrual)))
+		balance.Withdraws += float32(math.Abs(float64(accrual)))
 	}
-	sublog.Debug().Msgf("New balance is %v. New withdrawns is %v", balance.Balance, balance.Withdrawns)
-	_, err = s.conn.Exec(context.Background(), updateBalance, balance.Balance, balance.Withdrawns, login)
+	sublog.Debug().Msgf("New balance is %v. New withdraws is %v", balance.Balance, balance.Withdraws)
+	_, err = s.conn.Exec(context.Background(), updateBalance, balance.Balance, balance.Withdraws, login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error in update user balance request")
 		return err
@@ -243,50 +244,53 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 	return nil
 }
 
-func (s *Database) UpdateWithdrawn(sum float32, login, order string) error {
-	sublog.Info().Msg("Updating withdrawn")
-	sublog.Debug().Msgf("User is %v. withdrawn sum is %.2f for order %v", login, sum, order)
+func (s *Database) CreateWithdraw(sum float32, login, order string) error {
+	sublog.Info().Msg("Updating withdraw")
+	sublog.Debug().Msgf("User is %v. withdraw sum is %.2f for order %v", login, sum, order)
 	sum = sum * -1
 	err := s.UpdateBalance(login, sum)
 	if err != nil {
 		sublog.Info().Msg("Update balance failed")
 		return err
 	}
-	_, err = s.conn.Exec(context.Background(), createWithdrawn, login, order, time.Now(), sum)
+	_, err = s.conn.Exec(context.Background(), createWithdraw, login, order, time.Now(), float32(math.Abs(float64(sum))))
 	if err != nil {
 		sublog.Error().Err(err).Msg("")
 		return err
 	}
-	sublog.Info().Msg("Update orders withdrawn complete")
+	sublog.Info().Msg("Update orders withdraw complete")
 	return nil
 }
 
-func (s *Database) GetWithdrawns(login string) ([]models.Withdrawn, error) {
-	sublog.Info().Msgf("Requesting user's %v withdrawns", login)
-	withdrawns := make([]models.Withdrawn, 0)
-	rows, err := s.conn.Query(context.Background(), getWithdrawns, login)
+func (s *Database) GetWithdraws(login string) ([]models.Withdraw, error) {
+	sublog.Info().Msgf("Requesting user's %v withdraws", login)
+	withdraws := make([]models.Withdraw, 0)
+	rows, err := s.conn.Query(context.Background(), getWithdraws, login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("")
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		w := models.Withdrawn{}
+		w := models.Withdraw{}
 		var number string
 		var processed time.Time
-		var withdrawn float32
-		err = rows.Scan(&number, &withdrawn, &processed)
+		var withdraw float32
+		err = rows.Scan(&number, &withdraw, &processed)
 		if err != nil {
 			sublog.Error().Err(err).Msg("Error while reading rows")
 			return nil, err
 		}
-		sublog.Debug().Msgf("Withdrawn: %v", w)
-		if withdrawn > 0 {
-			withdrawns = append(withdrawns, w)
+		w.Number = number
+		w.Withdraw = withdraw
+		w.Processed = processed
+		sublog.Debug().Msgf("Withdraw: %v", w)
+		if withdraw > 0 {
+			withdraws = append(withdraws, w)
 		}
 	}
-	sublog.Debug().Msgf("Result withdrawn slice: %v", withdrawns)
-	return withdrawns, nil
+	sublog.Debug().Msgf("Result withdraw slice: %v", withdraws)
+	return withdraws, nil
 }
 
 func (s *Database) DeleteContent(table string) error {
@@ -297,9 +301,4 @@ func (s *Database) DeleteContent(table string) error {
 	}
 	sublog.Debug().Msgf("Table %s is clean", table)
 	return nil
-}
-
-func (s *Database) Close() {
-	s.conn.Close()
-	sublog.Info().Msg("Connection to database closed")
 }

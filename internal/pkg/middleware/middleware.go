@@ -49,7 +49,9 @@ func DecompressRequest(next http.Handler) http.Handler {
 			}
 			sublog.Debug().Msg("request body read")
 			r.ContentLength = int64(len(body))
+			log.Debug().Msgf("New ContentLenght is %v", int64(len(body)))
 			r.Body = io.NopCloser(bytes.NewBuffer(body))
+			log.Debug().Msgf("New request body is %v", string(body))
 			sublog.Debug().Msg("decompressiong complete")
 		}
 		next.ServeHTTP(w, r)

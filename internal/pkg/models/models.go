@@ -14,8 +14,8 @@ type User struct {
 
 //Balance - struct for handling balance
 type Balance struct {
-	Balance    float32 `json:"current"`   //Accrual balace
-	Withdrawns float32 `json:"withdrawn"` //Sum of withdrawns
+	Balance   float32 `json:"current"`   //Accrual balace
+	Withdraws float32 `json:"withdrawn"` //Sum of withdrawns
 }
 
 type Accrual struct {
@@ -45,16 +45,15 @@ func (o *Order) MarshalJSON() ([]byte, error) {
 }
 
 //Withdrawn - struct for handling withdrawns
-type Withdrawn struct {
-	Name      string    `json:"user"`         //Username
+type Withdraw struct {
 	Number    string    `json:"number"`       //Order number
 	Processed time.Time `json:"processed_at"` //Order processing time. Time in format RFC3339
-	Withdrawn float32   `json:"sum"`          //Witdrawn sum
+	Withdraw  float32   `json:"sum"`          //Witdrawn sum
 }
 
 //MarshalJSON - marshaling time.Time to time string in RFC3339 format
-func (w *Withdrawn) MarshalJSON() ([]byte, error) {
-	type Alias Withdrawn
+func (w *Withdraw) MarshalJSON() ([]byte, error) {
+	type Alias Withdraw
 	return json.Marshal(&struct {
 		*Alias
 		Processed string `json:"processed_at"`

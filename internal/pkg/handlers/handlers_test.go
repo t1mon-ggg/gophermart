@@ -53,6 +53,8 @@ func gziped(ctype map[string]string) bool {
 }
 
 func compress(data []byte) ([]byte, error) {
+	log.Debug().Msg("Compressing...")
+	log.Debug().Msgf("Not compressed body is %v", string(data))
 	var b bytes.Buffer
 	gz := gzip.NewWriter(&b)
 	if _, err := gz.Write([]byte(data)); err != nil {
@@ -103,16 +105,17 @@ func testRequest(t *testing.T, ts *httptest.Server, jar *cookiejar.Jar, method, 
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		log.Debug().Msg("Compressed response found")
+		respBody, err = decompress(respBody)
+		require.NoError(t, err)
+	}
 	defer resp.Body.Close()
-
 	return resp, string(respBody)
 }
 
-func userReq(t *testing.T, u, p string) string {
-	user := models.User{}
-	user.Name = u
-	user.Password = p
-	d, err := json.Marshal(user)
+func userReq(t *testing.T, val interface{}) string {
+	d, err := json.Marshal(val)
 	require.NoError(t, err)
 	return string(d)
 }
@@ -137,7 +140,7 @@ func Test_otherHandler(t *testing.T) {
 
 func TestGophermart_postRegister(t *testing.T) {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	jar, r, mart := newServer(t)
+	jar, r, s := newServer(t)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 	type args struct {
@@ -186,19 +189,25 @@ func TestGophermart_postRegister(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body := userReq(t, tt.args.name, tt.args.password)
+			body := userReq(t, tt.args)
 			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, tt.ctype)
 			defer response.Body.Close()
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := mart.db.DeleteContent("users")
+	err := s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
 	require.NoError(t, err)
 }
 
 func TestGophermart_postLogin(t *testing.T) {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	jar, r, mart := newServer(t)
+	jar, r, s := newServer(t)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 	type args struct {
@@ -260,7 +269,7 @@ func TestGophermart_postLogin(t *testing.T) {
 		Name:     "user111",
 		Password: "password111",
 	}
-	body := userReq(t, user.Name, user.Password)
+	body := userReq(t, user)
 	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 		"Content-Type": "application/json",
 	})
@@ -268,19 +277,25 @@ func TestGophermart_postLogin(t *testing.T) {
 	assert.Equal(t, http.StatusOK, response.StatusCode)
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body := userReq(t, tt.args.name, tt.args.password)
+			body := userReq(t, tt.args)
 			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/login", body, tt.ctype)
 			defer response.Body.Close()
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := mart.db.DeleteContent("users")
+	err := s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
 	require.NoError(t, err)
 }
 
 func TestGophermart_postOrder(t *testing.T) {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	jar, r, mart := newServer(t)
+	jar, r, s := newServer(t)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 	type args struct {
@@ -375,7 +390,7 @@ func TestGophermart_postOrder(t *testing.T) {
 		Name:     "user111",
 		Password: "password111",
 	}
-	body := userReq(t, user.Name, user.Password)
+	body := userReq(t, user)
 	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 		"Content-Type": "application/json",
 	})
@@ -391,7 +406,7 @@ func TestGophermart_postOrder(t *testing.T) {
 					Name:     "user112",
 					Password: "password112",
 				}
-				body := userReq(t, user.Name, user.Password)
+				body := userReq(t, user)
 				response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 					"Content-Type": "application/json",
 				})
@@ -402,22 +417,26 @@ func TestGophermart_postOrder(t *testing.T) {
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := mart.db.DeleteContent("orders")
+	err := s.db.DeleteContent("orders")
 	require.NoError(t, err)
-	err = mart.db.DeleteContent("users")
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
 	require.NoError(t, err)
 }
 
 func TestGophermart_getOrders(t *testing.T) {
 	zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	jar, r, mart := newServer(t)
+	jar, r, s := newServer(t)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 	user := models.User{
 		Name:     "user111",
 		Password: "password111",
 	}
-	body := userReq(t, user.Name, user.Password)
+	body := userReq(t, user)
 	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 		"Content-Type": "application/json",
 	})
@@ -469,7 +488,7 @@ func TestGophermart_getOrders(t *testing.T) {
 					Name:     "user112",
 					Password: "password112",
 				}
-				body := userReq(t, user.Name, user.Password)
+				body := userReq(t, user)
 				response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 					"Content-Type": "application/json",
 				})
@@ -480,9 +499,13 @@ func TestGophermart_getOrders(t *testing.T) {
 			assert.Equal(t, tt.code, response.StatusCode)
 		})
 	}
-	err := mart.db.DeleteContent("orders")
+	err := s.db.DeleteContent("orders")
 	require.NoError(t, err)
-	err = mart.db.DeleteContent("users")
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
 	require.NoError(t, err)
 }
 
@@ -516,16 +539,19 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
 	err := cmd.Start()
 	require.NoError(t, err)
+	defer cmd.Process.Kill()
 	time.Sleep(10 * time.Second)
 	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
+	require.NotZero(t, cmd.Process.Pid)
 	jar, r, s := newServer(t)
+	testaccrualrequests(t, s.Config)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
 	user := models.User{
 		Name:     "user111",
 		Password: "password111",
 	}
-	body := userReq(t, user.Name, user.Password)
+	body := userReq(t, user)
 	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
 		"Content-Type": "application/json",
 	})
@@ -534,8 +560,6 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", "123455", map[string]string{"Content-type": "text/plain"})
 	defer response.Body.Close()
 	assert.Equal(t, http.StatusAccepted, response.StatusCode)
-	testaccrualrequests(t, s.Config)
-	defer cmd.Process.Kill()
 	tests := []struct {
 		name  string
 		login string
@@ -549,7 +573,7 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s.AccrualAPI(tt.login, tt.order)
+			s.accrualAPI(tt.login, tt.order)
 			orders, _ := s.db.GetOrders(tt.login)
 			for _, order := range orders {
 				status := false
@@ -561,6 +585,423 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 		})
 	}
 	err = s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestGophermart_getBalance(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	jar, r, s := newServer(t)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	user := models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body := userReq(t, user)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	type wanted struct {
+		code    int
+		balance models.Balance
+		cType   string
+	}
+	tests := []struct {
+		name   string
+		want   wanted
+		status int
+	}{
+		{
+			name: "valid user",
+			want: wanted{
+				code: http.StatusOK,
+				balance: models.Balance{
+					Balance:   0,
+					Withdraws: 0,
+				},
+				cType: "application/json",
+			},
+			status: http.StatusOK,
+		},
+		{
+			name: "invalid user",
+			want: wanted{
+				code: http.StatusUnauthorized,
+			},
+			status: http.StatusUnauthorized,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "invalid user" {
+				jar, _ = cookiejar.New(nil)
+			}
+			response, body := testRequest(t, ts, jar, http.MethodGet, "/api/user/balance", "", nil)
+			defer response.Body.Close()
+			require.Equal(t, tt.want.code, response.StatusCode)
+			if tt.want.code == http.StatusOK {
+				require.Equal(t, tt.want.cType, response.Header.Get("Content-type"))
+				b := models.Balance{}
+				err := json.Unmarshal([]byte(body), &b)
+				require.NoError(t, err)
+				require.Equal(t, tt.want.balance, b)
+			}
+		})
+		err := s.db.DeleteContent("orders")
+		require.NoError(t, err)
+		err = s.db.DeleteContent("balance")
+		require.NoError(t, err)
+		err = s.db.DeleteContent("withdraws")
+		require.NoError(t, err)
+		err = s.db.DeleteContent("users")
+		require.NoError(t, err)
+	}
+}
+
+func TestGophermart_postBalanceWithdraw(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
+	err := cmd.Start()
+	require.NoError(t, err)
+	defer cmd.Process.Kill()
+	time.Sleep(10 * time.Second)
+	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
+	require.NotZero(t, cmd.Process.Pid)
+	jar, r, s := newServer(t)
+	testaccrualrequests(t, s.Config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	user := models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body := userReq(t, user)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", "123455", map[string]string{"Content-type": "text/plain"})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusAccepted, response.StatusCode)
+	time.Sleep(15 * time.Second)
+	type args struct {
+		Order string  `json:"order"`
+		Sum   float32 `json:"sum"`
+	}
+	tests := []struct {
+		name string
+		user string
+		arg  args
+		want int
+	}{
+		{
+			name: "Valid sum and order",
+			user: "user111",
+			arg: args{
+				Order: "84410807816",
+				Sum:   1,
+			},
+			want: http.StatusOK,
+		},
+		{
+			name: "Invalid order",
+			user: "user111",
+			arg: args{
+				Order: "84410803816",
+				Sum:   0,
+			},
+			want: http.StatusUnprocessableEntity,
+		},
+		{
+			name: "Invalid sum",
+			user: "user111",
+			arg: args{
+				Order: "577277243060172",
+				Sum:   100000,
+			},
+			want: http.StatusPaymentRequired,
+		},
+		{
+			name: "Invalid user",
+			user: "user11111",
+			arg: args{
+				Order: "",
+				Sum:   5,
+			},
+			want: http.StatusUnauthorized,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "Invalid user" {
+				jar, _ = cookiejar.New(nil)
+			}
+			body, err := json.Marshal(tt.arg)
+			require.NoError(t, err)
+			log.Debug().Msgf("Generated json: %v", string(body))
+			balance, err := s.db.GetBalance(tt.user)
+			log.Debug().Msgf("Current balance: %v", balance)
+			response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/balance/withdraw", string(body), map[string]string{"Content-type": "application/json"})
+			defer response.Body.Close()
+			assert.Equal(t, tt.want, response.StatusCode)
+		})
+	}
+	err = s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestGophermart_getBalanceWithdraw(t *testing.T) {
+	type postWithdrawn struct {
+		Order string  `json:"order"`
+		Sum   float32 `json:"sum"`
+	}
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
+	err := cmd.Start()
+	require.NoError(t, err)
+	defer cmd.Process.Kill()
+	time.Sleep(10 * time.Second)
+	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
+	require.NotZero(t, cmd.Process.Pid)
+	jar, r, s := newServer(t)
+	testaccrualrequests(t, s.Config)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	user := models.User{
+		Name:     "user112",
+		Password: "password112",
+	}
+	body := userReq(t, user)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	user = models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body = userReq(t, user)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", "123455", map[string]string{"Content-type": "text/plain"})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusAccepted, response.StatusCode)
+	time.Sleep(15 * time.Second)
+	body = userReq(t, postWithdrawn{Order: "84410807816", Sum: 1})
+	log.Debug().Msgf("Body: %v", body)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/balance/withdraw", string(body), map[string]string{"Content-type": "application/json"})
+	defer response.Body.Close()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	body = userReq(t, postWithdrawn{Order: "577277243060172", Sum: 1000})
+	log.Debug().Msgf("Body: %v", body)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/balance/withdraw", string(body), map[string]string{"Content-type": "application/json"})
+	defer response.Body.Close()
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	type wanted struct {
+		code      int
+		withdraws []models.Withdraw
+		cType     string
+		content   []models.Withdraw
+	}
+	tests := []struct {
+		name string
+		want wanted
+	}{
+		{
+			name: "Not empty withdraws",
+			want: wanted{
+				code:  http.StatusOK,
+				cType: "application/json",
+				withdraws: []models.Withdraw{
+					{
+						Number:   "577277243060172",
+						Withdraw: 1000,
+					},
+					{
+						Number:   "84410807816",
+						Withdraw: 1,
+					},
+				},
+			},
+		},
+		{
+			name: "Empty withdraws",
+			want: wanted{
+				code: http.StatusNoContent,
+			},
+		},
+		{
+			name: "Invalid user",
+			want: wanted{
+				code: http.StatusUnauthorized,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "Invalid user" {
+				jar, _ = cookiejar.New(nil)
+			}
+			if tt.name == "Empty withdraws" {
+				jar, _ = cookiejar.New(nil)
+				user := models.User{
+					Name:     "user112",
+					Password: "password112",
+				}
+				body = userReq(t, user)
+				response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/login", body, map[string]string{"Content-Type": "application/json"})
+				defer response.Body.Close()
+			}
+			response, got := testRequest(t, ts, jar, http.MethodGet, "/api/user/balance/withdraw", "", map[string]string{})
+			defer response.Body.Close()
+			assert.Equal(t, tt.want.code, response.StatusCode)
+			if tt.want.code == http.StatusOK {
+				g := make([]models.Withdraw, 0)
+				json.Unmarshal([]byte(got), &g)
+				for i, w := range g {
+					assert.Equal(t, tt.want.withdraws[i].Number, w.Number)
+					assert.Equal(t, tt.want.withdraws[i].Withdraw, w.Withdraw)
+				}
+			}
+		})
+	}
+	err = s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestGophermart_GzipSupportReq(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	jar, r, s := newServer(t)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	tests := []struct {
+		name  string
+		ctype map[string]string
+		args  models.User
+		want  int
+	}{
+		{
+			name: "Register new user",
+			ctype: map[string]string{
+				"Content-Type":     "application/json",
+				"Content-Encoding": "gzip",
+			},
+			args: models.User{
+				Name:     "user111",
+				Password: "password111",
+			},
+			want: http.StatusOK,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := userReq(t, tt.args)
+			response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, tt.ctype)
+			defer response.Body.Close()
+			assert.Equal(t, tt.want, response.StatusCode)
+		})
+	}
+	err := s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestGophermart_GzipSupportResp(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	jar, r, s := newServer(t)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+	user := models.User{
+		Name:     "user111",
+		Password: "password111",
+	}
+	body := userReq(t, user)
+	response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+		"Content-Type": "application/json",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusOK, response.StatusCode)
+	response, _ = testRequest(t, ts, jar, http.MethodPost, "/api/user/orders", "123455", map[string]string{
+		"Content-Type": "text/plain",
+	})
+	defer response.Body.Close()
+	assert.Equal(t, http.StatusAccepted, response.StatusCode)
+	tests := []struct {
+		name string
+		user string
+		want []models.Order
+		code int
+	}{
+		{
+			name: "Get valid orders",
+			user: "user1",
+			want: []models.Order{
+				{
+					Number:  "123455",
+					Status:  "PROCESSED",
+					AccRual: 0,
+				},
+			},
+			code: http.StatusOK,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.name == "Get unauthorized orders" {
+				jar, _ = cookiejar.New(nil)
+			}
+			if tt.name == "Get empty orders" {
+				user := models.User{
+					Name:     "user112",
+					Password: "password112",
+				}
+				body := userReq(t, user)
+				response, _ := testRequest(t, ts, jar, http.MethodPost, "/api/user/register", body, map[string]string{
+					"Content-Type":    "application/json",
+					"Accept-Encoding": "gzip",
+				})
+				defer response.Body.Close()
+			}
+			response, _ := testRequest(t, ts, jar, http.MethodGet, "/api/user/orders", "", map[string]string{})
+			defer response.Body.Close()
+			assert.Equal(t, tt.code, response.StatusCode)
+		})
+	}
+	err := s.db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = s.db.DeleteContent("withdraws")
 	require.NoError(t, err)
 	err = s.db.DeleteContent("users")
 	require.NoError(t, err)

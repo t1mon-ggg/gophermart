@@ -148,6 +148,10 @@ func TestDatabase_createUser(t *testing.T) {
 	}
 	err = db.DeleteContent("orders")
 	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
+	require.NoError(t, err)
 	err = db.DeleteContent("users")
 	require.NoError(t, err)
 }
@@ -195,6 +199,10 @@ func TestDatabase_getUser(t *testing.T) {
 		})
 	}
 	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
 	require.NoError(t, err)
 	err = db.DeleteContent("users")
 	require.NoError(t, err)
@@ -252,7 +260,213 @@ func TestDatabase_CreateOrder(t *testing.T) {
 	}
 	err = db.DeleteContent("orders")
 	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
+	require.NoError(t, err)
 	err = db.DeleteContent("users")
 	require.NoError(t, err)
+}
 
+func TestDatabase_getOrders(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	tests := []struct {
+		name string
+		user string
+		want []models.Order
+	}{
+		{
+			name: "valid order",
+			user: "user111",
+			want: []models.Order{
+				{
+					Number:  "123455",
+					Status:  "NEW",
+					AccRual: 0,
+				},
+			},
+		},
+		{
+			name: "invalid order",
+			user: "user112",
+			want: []models.Order{},
+		},
+	}
+	db, err := New("postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable")
+	require.NoError(t, err)
+	err = db.CreateUser("user111", "password111", "random111")
+	require.NoError(t, err)
+	err = db.CreateOrder("123455", "user111")
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := db.GetOrders(tt.user)
+			require.NoError(t, err)
+			for i, order := range got {
+				require.Equal(t, tt.want[i].Number, order.Number)
+				require.Equal(t, tt.want[i].Status, order.Status)
+				require.Equal(t, tt.want[i].AccRual, order.AccRual)
+			}
+		})
+	}
+	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestDatabase_getBalance(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	tests := []struct {
+		name string
+		user string
+		want models.Balance
+	}{
+		{
+			name: "valid user",
+			user: "user111",
+			want: models.Balance{
+				Balance:   5000,
+				Withdraws: 0,
+			},
+		},
+		{
+			name: "invalid user",
+			user: "user112",
+			want: models.Balance{
+				Balance:   0,
+				Withdraws: 0,
+			},
+		},
+	}
+	db, err := New("postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable")
+	require.NoError(t, err)
+	err = db.CreateUser("user111", "password111", "random111")
+	require.NoError(t, err)
+	err = db.CreateUser("user112", "password112", "random112")
+	require.NoError(t, err)
+	err = db.UpdateBalance("user111", 5000)
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := db.GetBalance(tt.user)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestDatabase_createWithdraw(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	tests := []struct {
+		name string
+		user string
+		want bool
+	}{
+		{
+			name: "valid user",
+			user: "user111",
+			want: true,
+		},
+		{
+			name: "invalid user",
+			user: "user112",
+			want: false,
+		},
+		{
+			name: "invalid order",
+			user: "user111",
+			want: false,
+		},
+	}
+	db, err := New("postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable")
+	require.NoError(t, err)
+	err = db.CreateUser("user111", "password111", "random111")
+	require.NoError(t, err)
+	err = db.CreateUser("user112", "password112", "random112")
+	require.NoError(t, err)
+	err = db.UpdateBalance("user111", 5000)
+	require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := true
+			err := db.CreateWithdraw(1000, tt.user, "123456")
+			if err != nil {
+				e = false
+			}
+			assert.Equal(t, tt.want, e)
+		})
+	}
+	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = db.DeleteContent("users")
+	require.NoError(t, err)
+}
+
+func TestDatabase_getWithdraws(t *testing.T) {
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	tests := []struct {
+		name string
+		user string
+		want []models.Withdraw
+	}{
+		{
+			name: "valid user",
+			user: "user111",
+			want: []models.Withdraw{
+				{
+					Number:   "123455",
+					Withdraw: 1000,
+				},
+			},
+		},
+		{
+			name: "invalid user",
+			user: "user112",
+			want: []models.Withdraw{},
+		},
+	}
+	db, err := New("postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable")
+	require.NoError(t, err)
+	err = db.CreateUser("user111", "password111", "random111")
+	require.NoError(t, err)
+	err = db.CreateUser("user112", "password112", "random112")
+	require.NoError(t, err)
+	err = db.UpdateBalance("user111", 5000)
+	require.NoError(t, err)
+	err = db.CreateWithdraw(1000, "user111", "123455")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := db.GetWithdraws(tt.user)
+			require.NoError(t, err)
+			for i, withdraw := range got {
+				assert.Equal(t, tt.want[i].Number, withdraw.Number)
+				assert.Equal(t, tt.want[i].Withdraw, withdraw.Withdraw)
+			}
+		})
+	}
+	err = db.DeleteContent("orders")
+	require.NoError(t, err)
+	err = db.DeleteContent("balance")
+	require.NoError(t, err)
+	err = db.DeleteContent("withdraws")
+	require.NoError(t, err)
+	err = db.DeleteContent("users")
+	require.NoError(t, err)
 }
