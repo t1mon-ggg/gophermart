@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v4/pgxpool"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
@@ -50,7 +49,7 @@ const (
 	getBalance      = `SELECT "balance", "withdrawn" from "users" where "name" = $1`
 	updateOrder     = `UPDATE public.orders SET status=$1, accrual=$2, processed_at=$3 WHERE "order" = $4`
 	updateBalance   = `UPDATE public.users SET balance=$1, withdrawn=$2 WHERE "name" = $3`
-	updateWithdrawn = `UPDATE public.orders SET withdrawn = $1, processed_at = $2  WHERE "order" = $3 "name" = $4`
+	updateWithdrawn = `UPDATE public.orders SET withdrawn = $1, processed_at = $2  WHERE "order" = $3 AND "name" = $4`
 	getWithdrawns   = `SELECT "order", "withdrawn", "processed_at" from "orders" where "name" = $1 ORDER BY "processed_at" DESC`
 )
 
@@ -198,6 +197,8 @@ func (s *Database) GetBalance(login string) (float32, float32, error) {
 func (s *Database) UpdateBalance(login string, accrual float32) error {
 	sublog.Info().Msg("Updating balance")
 	sublog.Debug().Msgf("User is %v and delta is %v", login, accrual)
+
+	sublog.Debug().Msgf("SQL Query: %v", fmt.Sprintf(""))
 	balance, withdraw, err := s.GetBalance(login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error in get user balance request")
@@ -212,18 +213,11 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 	if accrual < 0 {
 		withdraw += float32(math.Abs(float64(accrual)))
 	}
-	sublog.Debug().Msgf("New balance is %v. New withdrawns is %v", balance, withdraw)
+	sublog.Debug().Msgf("N/ew balance is %v. New withdrawns is %v", balance, withdraw)
 	_, err = s.conn.Exec(context.Background(), updateBalance, balance, withdraw, login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error in update user balance request")
 		return err
-	}
-	if log.Logger.GetLevel() == zerolog.DebugLevel {
-		balance, withdrawns, err := s.GetBalance(login)
-		if err != nil {
-			sublog.Debug().Err(err)
-		}
-		sublog.Debug().Msgf("Result. Balance - %v, Withdrawns - %v", balance, withdrawns)
 	}
 	sublog.Info().Msgf("User %v updated", login)
 	return nil
