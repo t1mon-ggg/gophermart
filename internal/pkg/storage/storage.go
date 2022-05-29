@@ -197,8 +197,6 @@ func (s *Database) GetBalance(login string) (float32, float32, error) {
 func (s *Database) UpdateBalance(login string, accrual float32) error {
 	sublog.Info().Msg("Updating balance")
 	sublog.Debug().Msgf("User is %v and delta is %v", login, accrual)
-
-	sublog.Debug().Msgf("SQL Query: %v", fmt.Sprintf(""))
 	balance, withdraw, err := s.GetBalance(login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error in get user balance request")
