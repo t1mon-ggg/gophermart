@@ -184,7 +184,7 @@ func (s *Database) CreateOrder(order, user string) error {
 	sublog.Info().Msgf("Creating new order %v", order)
 	_, err := s.conn.Exec(context.Background(), createOrder, order, user, time.Now())
 	if err != nil {
-		sublog.Error().Err(err).Msg("")
+		sublog.Info().Err(err).Msg("")
 		return err
 	}
 	sublog.Info().Msgf("Order %v created", order)

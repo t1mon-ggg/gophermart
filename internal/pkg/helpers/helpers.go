@@ -214,10 +214,10 @@ func CheckOrder(s []byte) bool {
 	if err != nil {
 		switch err {
 		case checksum.ErrInvalidNumber:
-			sublog.Error().Msg("Invalid order number")
+			sublog.Info().Msg("Invalid order number")
 			return false
 		case checksum.ErrInvalidChecksum:
-			sublog.Error().Msg("Invalid order checksum")
+			sublog.Info().Msg("Invalid order checksum")
 			return false
 		}
 	}
