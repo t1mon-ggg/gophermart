@@ -474,8 +474,8 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 		}
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK {
-			subsublog.Debug().Msgf("Status code not 200. Recieved code %d. Waiting for 15 seconds to the next try", response.StatusCode)
-			time.Sleep(15 * time.Second)
+			subsublog.Debug().Msgf("Status code not 200. Recieved code %d. Waiting for 1 second to the next try", response.StatusCode)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		body, err := io.ReadAll(response.Body)
@@ -488,11 +488,11 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 			subsublog.Error().Err(err).Msg("Error in unmarshaling answer from accrual system")
 		}
 		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
-			subsublog.Debug().Msg("Accrual calculation in progress. Waiting for 15 seeconds to the next try")
+			subsublog.Debug().Msg("Accrual calculation in progress. Waiting for 1 seeconds to the next try")
 			wait = true
 		}
 		if !wait {
-			time.Sleep(15 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 	}
 	if acc.Status == "INVALID" {
