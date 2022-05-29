@@ -292,6 +292,10 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
+	type withdrawn struct {
+		Number string  `json:"order"`
+		Sum    float32 `json:"sum"`
+	}
 	sublog.Info().Msg("Processing request of a new withdrawn")
 	ctype := r.Header.Get("Content-Type")
 	if ctype != "application/json" {
@@ -305,20 +309,21 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	withdrawn := models.Order{}
+	a := withdrawn{}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Request body read error")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	err = json.Unmarshal(body, &withdrawn)
+	err = json.Unmarshal(body, &w)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error while parsing JSON body")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
-	if !helpers.CheckOrder([]byte(withdrawn.Number)) {
+	sublog.Debug().Msgf("Recived")
+	if !helpers.CheckOrder([]byte(a.Number)) {
 		sublog.Info().Msg("Wrong order number")
 		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
 		return
@@ -329,12 +334,12 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
 		return
 	}
-	if !helpers.WithdrawnError(uOrders, withdrawn.Number) {
+	if !helpers.WithdrawnError(uOrders, a.Number) {
 		sublog.Info().Msg("User and order number missmatch")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	err = s.db.UpdateWithdrawn(withdrawn.Withdrawn, user, withdrawn.Number)
+	err = s.db.UpdateWithdrawn(a.Sum, user, a.Number)
 	if err != nil {
 		if helpers.BalanceTooLow(err) {
 			sublog.Info().Msg("Not enough bonuses on the balance")
