@@ -22,9 +22,15 @@ const (
 		"name" text NOT NULL UNIQUE,
 		"password" text NOT NULL,
 		"random_iv" text NOT NULL,
+		CONSTRAINT users_id_pk PRIMARY KEY (id)
+	);
+
+	CREATE TABLE IF NOT EXISTS balance (
+		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
+		"name" text NOT NULL UNIQUE,
 		"balance" float8 NOT NULL DEFAULT 0,
 		"withdrawn" float8 NOT NULL DEFAULT 0,
-		CONSTRAINT users_id_pk PRIMARY KEY (id)
+		CONSTRAINT balance_id_pk PRIMARY KEY (id)
 	);
 
 	CREATE TABLE IF NOT EXISTS public.orders (
@@ -43,7 +49,7 @@ const (
 		"order" text NOT NULL,
 		"processed_at"  timestamptz,
 		"withdrawn" float8 NOT NULL DEFAULT 0,
-		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name")
+		CONSTRAINT withdrawns_fk FOREIGN KEY (name) REFERENCES public.users("name")
 	);
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_user_idx ON public.orders ("order","name");
 	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_idx ON public.orders ("order");
@@ -53,9 +59,9 @@ const (
 	getUser         = `SELECT "password", "random_iv" from "users" where "name" = $1`
 	createOrder     = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
 	getOrders       = `SELECT "order", "status", "accrual", "uploaded_at" from "orders" where "name" = $1 ORDER BY "uploaded_at" DESC`
-	getBalance      = `SELECT "balance", "withdrawn" from "users" where "name" = $1`
+	getBalance      = `SELECT "balance", "withdrawn" from "balance" where "name" = $1`
 	updateOrder     = `UPDATE public.orders SET status=$1, accrual=$2, WHERE "order" = $4`
-	updateBalance   = `UPDATE public.users SET balance=$1, withdrawn=$2 WHERE "name" = $3`
+	updateBalance   = `UPDATE public.balance SET balance=$1, withdrawn=$2 WHERE "name" = $3`
 	createWithdrawn = `INSERT INTO public.withdrawns ("name", "order", "processed_at", "withdrawn")  = $1, processed_at = $2  WHERE "order" = $3 AND "name" = $4`
 	getWithdrawns   = `SELECT "order", "withdrawn", "processed_at" from "withdrawns" where "name" = $1 ORDER BY "processed_at" DESC`
 )
