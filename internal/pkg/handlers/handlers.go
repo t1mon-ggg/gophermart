@@ -331,17 +331,17 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
 		return
 	}
-	uOrders, err := s.db.GetOrders(user)
-	if err != nil {
-		sublog.Info().Msg("Error in request user's orders")
-		http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
-		return
-	}
-	if !helpers.WithdrawnError(uOrders, a.Number) {
-		sublog.Info().Msg("User and order number missmatch")
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
+	// uOrders, err := s.db.GetOrders(user)
+	// if err != nil {
+	// 	sublog.Info().Msg("Error in request user's orders")
+	// 	http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
+	// 	return
+	// }
+	// if !helpers.WithdrawnError(uOrders, a.Number) {
+	// 	sublog.Info().Msg("User and order number missmatch")
+	// 	http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	// 	return
+	// }
 	err = s.db.UpdateWithdrawn(a.Sum, user, a.Number)
 	if err != nil {
 		if helpers.BalanceTooLow(err) {
