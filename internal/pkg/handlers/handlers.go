@@ -436,7 +436,7 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 }
 
 func (s *Gophermart) AccrualAPI(login, order string) {
-	subsublog := sublog.With().Str("component", "accrual api").Logger()
+	subsublog := sublog.With().Str("subcomponent", "accrual api").Logger()
 	subsublog.Info().Msg("Processing new order withh accrual service.")
 	/*
 		Accrual answer example
