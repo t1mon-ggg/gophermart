@@ -490,15 +490,15 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 		}
 		sublog.Debug().Msgf("Parsed from json. Order: %v, Status: %v, Accrual: %v", acc.Order, acc.Status, acc.Val)
 		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
-			subsublog.Debug().Msg("Accrual calculation in progress. Waiting for 1 seeconds to the next try")
+			subsublog.Debug().Msg("Accrual calculation in progress.")
 			wait = true
 		}
 		if !wait {
+			sublog.Debug().Msg("Waiting for 1 seeconds to the next try")
 			time.Sleep(1 * time.Second)
 		}
 	}
 	if acc.Status == "INVALID" {
-
 		acc.Val = 0
 	}
 	subsublog.Info().Msgf("Accrual processing complete. Processing status is %v", acc.Status)

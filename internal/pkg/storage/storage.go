@@ -60,7 +60,7 @@ const (
 	createOrder     = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
 	getOrders       = `SELECT "order", "status", "accrual", "uploaded_at" from "orders" where "name" = $1 ORDER BY "uploaded_at" DESC`
 	getBalance      = `SELECT "balance", "withdrawn" from "balance" where "name" = $1`
-	updateOrder     = `UPDATE public.orders SET status=$1, accrual=$2, WHERE "order" = $4`
+	updateOrder     = `UPDATE public.orders SET status=$1, accrual=$2 WHERE "order" = $4`
 	updateBalance   = `UPDATE public.balance SET balance=$1, withdrawn=$2 WHERE "name" = $3`
 	createWithdrawn = `INSERT INTO public.withdrawns ("name", "order", "processed_at", "withdrawn")  = $1, processed_at = $2  WHERE "order" = $3 AND "name" = $4`
 	getWithdrawns   = `SELECT "order", "withdrawn", "processed_at" from "withdrawns" where "name" = $1 ORDER BY "processed_at" DESC`
