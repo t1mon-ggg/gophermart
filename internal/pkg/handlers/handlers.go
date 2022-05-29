@@ -253,7 +253,7 @@ func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing request of a balance")
 	type b struct {
-		Balance   float32 `json:"balance"`
+		Balance   float32 `json:"current"`
 		Withdrawn float32 `json:"withdrawn"`
 	}
 	answer := b{}

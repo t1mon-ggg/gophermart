@@ -6,10 +6,11 @@ import (
 )
 
 type User struct {
-	Name     string `json:"login"`    //Unique user name
-	Password string `json:"password"` //Hashed password
-	Random   string `json:"-"`        //Random IV
-	Balance  int    `json:"-"`        //Accrual balace
+	Name       string  `json:"login"`    //Unique user name
+	Password   string  `json:"password"` //Hashed password
+	Random     string  `json:"-"`        //Random IV
+	Balance    int     `json:"-"`        //Accrual balace
+	Withdrawns float32 `json:"-"`
 }
 
 type Order struct {
