@@ -319,7 +319,7 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	sublog.Debug().Msgf("Recieved body: %v", string(body))
-	err = json.Unmarshal(body, &w)
+	err = json.Unmarshal(body, &a)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error while parsing JSON body")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
