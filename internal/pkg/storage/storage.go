@@ -212,7 +212,7 @@ func (s *Database) UpdateBalance(login string, accrual float32) error {
 	if accrual < 0 {
 		withdraw += float32(math.Abs(float64(accrual)))
 	}
-	sublog.Debug().Msgf("New balance is %v", balance)
+	sublog.Debug().Msgf("New balance is %v. New withdrawns is %v", balance, withdraw)
 	_, err = s.conn.Exec(context.Background(), updateBalance, balance, withdraw, login)
 	if err != nil {
 		sublog.Error().Err(err).Msg("Error in update user balance request")
