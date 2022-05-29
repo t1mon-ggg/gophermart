@@ -224,10 +224,15 @@ func BalanceTooLow(err error) bool {
 }
 
 func WithdrawnError(s []models.Order, number string) bool {
+	sublog.Debug().Msg("Check user's orders")
+	sublog.Debug().Msgf("Orders: %v", s)
+	sublog.Debug().Msgf("Order: %v", number)
 	for _, order := range s {
 		if order.Number == number {
+			sublog.Debug().Msg("Order found")
 			return true
 		}
 	}
+	sublog.Debug().Msg("Order not found")
 	return false
 }
