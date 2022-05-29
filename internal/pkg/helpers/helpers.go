@@ -15,12 +15,11 @@ import (
 	"github.com/neonxp/checksum"
 	"github.com/neonxp/checksum/luhn"
 	"github.com/rs/zerolog/log"
-	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
 const (
-	letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz" //Alphabet for random generation
 )
 
 var sublog = log.With().Str("component", "helper").Logger()
@@ -115,6 +114,7 @@ func CompareCookie(c, u, h, ip, r string) bool {
 	return true
 }
 
+//RandStringRunes - generate random string with custom lenght
 func RandStringRunes(n int) string {
 	b := make([]byte, n)
 	for i := 0; i < n; i++ {
@@ -129,6 +129,7 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
+//UserConflict - checking the sql error for unique violation of username
 func UserConflict(err error) bool {
 	sublog.Debug().Msg("Check unique user error")
 	var pgErr *pgconn.PgError
@@ -142,6 +143,7 @@ func UserConflict(err error) bool {
 	return false
 }
 
+//OrderUnique - checking the sql error for unique violation of order number
 func OrderUnique(err error) bool {
 	sublog.Debug().Msg("Check unique user error")
 	var pgErr *pgconn.PgError
@@ -157,6 +159,7 @@ func OrderUnique(err error) bool {
 	return false
 }
 
+//OrderExists - checking the sql error for unique violation of order number and username pair
 func OrderExists(err error) bool {
 	sublog.Debug().Msg("Check unique user's order error")
 	var pgErr *pgconn.PgError
@@ -172,11 +175,13 @@ func OrderExists(err error) bool {
 	return false
 }
 
+//EmptyRow - cheking sql error for emtry rows result set
 func EmptyRow(err error) bool {
 	sublog.Debug().Msg("Check empty row error")
 	return err.Error() == "no rows in result set"
 }
 
+//SetCookie - writing new cookie to web response
 func SetCookie(w http.ResponseWriter, name, value string) {
 	sublog.Debug().Msgf("Creating new cookie %v", name)
 	cookie := http.Cookie{
@@ -188,8 +193,9 @@ func SetCookie(w http.ResponseWriter, name, value string) {
 	http.SetCookie(w, &cookie)
 }
 
+//GetUser - getting username from request cookies
 func GetUser(r *http.Request) (string, error) {
-	sublog.Debug().Msg("Reading user name from cookie %v")
+	sublog.Debug().Msg("Reading user name from cookie")
 	cookie, err := r.Cookie("username")
 	if err != nil {
 		sublog.Error().Err(err)
@@ -200,6 +206,7 @@ func GetUser(r *http.Request) (string, error) {
 	return username, nil
 }
 
+//CheckOrder - checking order number by luhn algorithm
 func CheckOrder(s []byte) bool {
 	sublog.Debug().Msg("Checking order number wirh luhn algorithm")
 	str := string(s)
@@ -218,21 +225,8 @@ func CheckOrder(s []byte) bool {
 	return true
 }
 
+//BalanceTooLow - checking the error for a low balance user error
 func BalanceTooLow(err error) bool {
 	sublog.Debug().Msg("Check low balance error")
 	return err.Error() == "we need to build more ziggurats"
-}
-
-func WithdrawnError(s []models.Order, number string) bool {
-	sublog.Debug().Msg("Check user's orders")
-	sublog.Debug().Msgf("Orders: %v", s)
-	sublog.Debug().Msgf("Order: %v", number)
-	for _, order := range s {
-		if order.Number == number {
-			sublog.Debug().Msg("Order found")
-			return true
-		}
-	}
-	sublog.Debug().Msg("Order not found")
-	return false
 }

@@ -26,13 +26,10 @@ type Gophermart struct {
 	db     *storage.Database
 }
 
-type data struct {
-	user   models.User
-	orders []models.Order
-}
-
+//sublog - package handlers sub logger
 var sublog = log.With().Str("component", "handlers").Logger()
 
+//NewGopherMart - creating new application main work object
 func NewGopherMart() *Gophermart {
 	app := Gophermart{}
 	app.Config = config.New()
@@ -46,6 +43,7 @@ func NewGopherMart() *Gophermart {
 	return &app
 }
 
+//Router - creating working router
 func (s *Gophermart) Router(r chi.Router) {
 	r.Use(chiMiddleware.Compress(5))
 	r.Use(chiMiddleware.RequestID)
@@ -54,7 +52,7 @@ func (s *Gophermart) Router(r chi.Router) {
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(mymiddleware.TimeTracer)
 	r.Use(mymiddleware.DecompressRequest)
-	r.Use(s.AuthChecker)
+	r.Use(s.authChecker)
 
 	r.Post("/api/user/register", s.postRegister)                //All users
 	r.Post("/api/user/login", s.postLogin)                      //All users
@@ -67,11 +65,7 @@ func (s *Gophermart) Router(r chi.Router) {
 	r.NotFound(otherHandler)                                    //All users
 }
 
-func otherHandler(w http.ResponseWriter, r *http.Request) {
-	sublog.Info().Msg("Wrong request recieved")
-	http.Error(w, "Wrong request format", http.StatusBadRequest)
-}
-
+//postRegister - handling/api/user/register on method POST
 func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing new order")
 	var newuser models.User
@@ -122,6 +116,7 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte{})
 }
 
+//postLogin - handling/api/user/login on method POST
 func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing authorization request")
 	var user models.User
@@ -168,6 +163,7 @@ func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte{})
 }
 
+//postOrders - handling/api/user/orders on method POST
 func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing new order")
 	ctype := r.Header.Get("Content-Type")
@@ -220,6 +216,7 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	go s.AccrualAPI(user, order)
 }
 
+//getBalance - handling/api/user/orders on method GET
 func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 	user, err := helpers.GetUser(r)
 	sublog.Info().Msgf("Request user's %v orders", user)
@@ -252,6 +249,7 @@ func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
+//getBalance - handling/api/user/balance on method GET
 func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing request of a balance")
 	user, err := helpers.GetUser(r)
@@ -286,6 +284,7 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
+//postBalanceWithdraw - handling/api/user/balance/withdraw on method POST
 func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
 	type withdrawn struct {
 		Number string  `json:"order"`
@@ -337,6 +336,7 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 	w.Write(body)
 }
 
+//getBalanceWithdraw - handling/api/user/balance/withdraw on method GET
 func (s *Gophermart) getBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Processing request of a withdrawns")
 	user, err := helpers.GetUser(r)
@@ -375,8 +375,14 @@ func (s *Gophermart) getBalanceWithdraw(w http.ResponseWriter, r *http.Request) 
 
 }
 
-//AuthChecker - check auth cookie for custom urls
-func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
+//getBalanceWithdraw - handling other paths and methods
+func otherHandler(w http.ResponseWriter, r *http.Request) {
+	sublog.Info().Msg("Wrong request recieved")
+	http.Error(w, "Wrong request format", http.StatusBadRequest)
+}
+
+//AuthChecker - checking authorization cookies in requests
+func (s *Gophermart) authChecker(next http.Handler) http.Handler {
 	sublog.Debug().Msg("Request authorization tokens check")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var value string
@@ -439,25 +445,7 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 func (s *Gophermart) AccrualAPI(login, order string) {
 	subsublog := sublog.With().Str("subcomponent", "accrual api").Logger()
 	subsublog.Info().Msg("Processing new order withh accrual service.")
-	/*
-		Accrual answer example
-
-			200 OK HTTP/1.1
-		  Content-Type: application/json
-		  ...
-
-		  {
-		      "order": "<number>",
-		      "status": "PROCESSED",
-		      "accrual": 500
-		  }
-	*/
-	type accrual struct {
-		Order  string  `json:"order"`             //Order number.
-		Status string  `json:"status"`            //Order status. Allowed values are "REGISTERED", "INVALID", "PROCESSING", "PROCESSED". Status "INVALID" or "PROCESSED" are final.
-		Val    float32 `json:"accrual,omitempty"` //Calculated accrual value.
-	}
-	var acc accrual
+	acc := models.Accrual{}
 	url := fmt.Sprintf("%s/api/orders/%s", s.Config.AccSystem, order)
 	subsublog.Debug().Msgf("Actual accrual system request is '%s'", url)
 	client := http.Client{}
@@ -488,7 +476,7 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 		if err != nil {
 			subsublog.Error().Err(err).Msg("Error in unmarshaling answer from accrual system")
 		}
-		sublog.Debug().Msgf("Parsed from json. Order: %v, Status: %v, Accrual: %v", acc.Order, acc.Status, acc.Val)
+		sublog.Debug().Msgf("Parsed from json. Order: %v, Status: %v, Accrual: %v", acc.Order, acc.Status, acc.Value)
 		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
 			subsublog.Debug().Msg("Accrual calculation in progress.")
 			wait = true
@@ -499,15 +487,15 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 		}
 	}
 	if acc.Status == "INVALID" {
-		acc.Val = 0
+		acc.Value = 0
 	}
 	subsublog.Info().Msgf("Accrual processing complete. Processing status is %v", acc.Status)
-	err = s.db.UpdateOrder(order, acc.Status, acc.Val)
+	err = s.db.UpdateOrder(order, acc.Status, acc.Value)
 	if err != nil {
 		subsublog.Error().Err(err)
 		return
 	}
-	err = s.db.UpdateBalance(login, acc.Val)
+	err = s.db.UpdateBalance(login, acc.Value)
 	if err != nil {
 		subsublog.Error().Err(err)
 		return

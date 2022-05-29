@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+//Config - struct for handling configuration
 type Config struct {
 	Bind      string `env:"RUN_ADDRESS"`
 	DBPath    string `env:"DATABASE_URI"`
@@ -21,9 +22,9 @@ var sublog = log.With().Str("component", "config").Logger()
 //NewConfig - выделение памяти для новой конфигурации
 func New() *Config {
 	s := Config{
-		DBPath:    "postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable",
-		Bind:      "127.0.0.1:8081",
-		AccSystem: "http://127.0.0.1:8080",
+		DBPath:    "postgresql://postgres:admin@127.0.0.1:5432/gophermart?sslmode=disable", //This is default value of DATABASE_URI
+		Bind:      "127.0.0.1:8081",                                                        //This is default value of RUN_ADDRESS
+		AccSystem: "http://127.0.0.1:8080",                                                 //This is default value of ACCRUAL_SYSTEM_ADDRESS
 	}
 	err := s.readEnv()
 	if err != nil {
@@ -31,11 +32,11 @@ func New() *Config {
 		os.Exit(1)
 	}
 	s.readCli()
-	sublog.Log().Msgf("Setuped log level is %s", zerolog.GlobalLevel().String())
+	sublog.Log().Msgf("The configured log level is set to %s", zerolog.GlobalLevel().String())
 	return &s
 }
 
-//isFlagPassed - проверка применение флага
+//isFlagPassed - checking the using of the flag
 func isFlagPassed(name string) bool {
 	found := false
 	flag.Visit(func(f *flag.Flag) {
@@ -65,6 +66,7 @@ func (cfg *Config) readEnv() error {
 	return nil
 }
 
+//flags - map for flag iterations
 var flags = map[string]string{
 	"a":     "RUN_ADDRESS",
 	"d":     "DATABASE_URI",
@@ -73,6 +75,7 @@ var flags = map[string]string{
 	"l":     "LOG_LEVEL",
 }
 
+//Configuring flags
 var path = flag.String("a", "", fmt.Sprintf("reads %s from flags", flags["a"]))
 var bind = flag.String("d", "", fmt.Sprintf("reads %s from flags", flags["d"]))
 var accPath = flag.String("r", "", fmt.Sprintf("reads %s from flags", flags["r"]))

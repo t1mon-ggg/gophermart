@@ -13,7 +13,7 @@ import (
 
 var sublog = log.With().Str("component", "middleware").Logger()
 
-//TimeTracer - middleware для остлеживания времени исполнения запроса
+//TimeTracer - middleware for time tracking processing incoming requests
 func TimeTracer(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tStart := time.Now()
@@ -26,7 +26,7 @@ func TimeTracer(next http.Handler) http.Handler {
 	})
 }
 
-//DecompressRequest - middleware для декомпрессии входящих запросов
+//DecompressRequest - middleware for decompressing incoming user requests on the fly
 func DecompressRequest(next http.Handler) http.Handler {
 	sublog.Debug().Msg("Request decompression")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
