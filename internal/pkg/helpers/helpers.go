@@ -22,14 +22,16 @@ const (
 	letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 )
 
+var sublog = log.With().Str("component", "helper").Logger()
+
 //Generate bcrypt password value
 func SecurePassword(s string) (string, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(s), 10)
 	if err != nil {
-		log.Error().Err(err).Msg("")
+		sublog.Error().Err(err).Msg("")
 		return "", err
 	}
-	log.Debug().Msgf("Password hash created: %s", string(hash))
+	sublog.Debug().Msgf("Password hash created: %s", string(hash))
 	return string(hash), nil
 }
 
@@ -37,10 +39,10 @@ func SecurePassword(s string) (string, error) {
 func ComparePassword(s, h string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(h), []byte(s))
 	if err == nil {
-		log.Debug().Msg("Password correct")
+		sublog.Debug().Msg("Password correct")
 		return true
 	}
-	log.Debug().Msg("Password incorrect")
+	sublog.Debug().Msg("Password incorrect")
 	return false
 }
 
@@ -62,13 +64,13 @@ func GenerateCookieValue(u, h, ip, r string) string {
 	for i := range d {
 		digest = append(digest, d[i])
 	}
-	log.Debug().Msgf("Cookie data is %s", hex.EncodeToString(digest))
+	sublog.Debug().Msgf("Cookie data is %s", hex.EncodeToString(digest))
 	hash := hmac.New(sha256.New, []byte(r))
 	hash.Write(digest)
 	sign := hash.Sum(nil)
-	log.Debug().Msgf("Cookie sign is %s", hex.EncodeToString(sign))
+	sublog.Debug().Msgf("Cookie sign is %s", hex.EncodeToString(sign))
 	value := hex.EncodeToString(digest) + ":" + hex.EncodeToString(sign)
-	log.Debug().Msgf("Cookie value is %s", value)
+	sublog.Debug().Msgf("Cookie value is %s", value)
 	return value
 }
 
@@ -87,28 +89,28 @@ r - random string
 */
 func CompareCookie(c, u, h, ip, r string) bool {
 	cc := strings.Split(c, ":")
-	log.Debug().Msgf("cookie data: %s, cookie sign: %s", cc[0], cc[1])
+	sublog.Debug().Msgf("cookie data: %s, cookie sign: %s", cc[0], cc[1])
 	data := []byte(u + h + ip)
 	d := md5.Sum(data)
 	digest := make([]byte, 0)
 	for i := range d {
 		digest = append(digest, d[i])
 	}
-	log.Debug().Msgf("Cookie data is %s", hex.EncodeToString(digest))
+	sublog.Debug().Msgf("Cookie data is %s", hex.EncodeToString(digest))
 	if hex.EncodeToString(digest) != cc[0] {
-		log.Debug().Msg("Cookie is invalid. Data missmatch")
+		sublog.Debug().Msg("Cookie is invalid. Data missmatch")
 		return false
 	}
 
 	hash := hmac.New(sha256.New, []byte(r))
 	hash.Write(digest)
 	sign := hash.Sum(nil)
-	log.Debug().Msgf("Cookie sign is %s", hex.EncodeToString(sign))
+	sublog.Debug().Msgf("Cookie sign is %s", hex.EncodeToString(sign))
 	if hex.EncodeToString(sign) != cc[1] {
-		log.Debug().Msg("Cookie is invalid. Sign missmatch")
+		sublog.Debug().Msg("Cookie is invalid. Sign missmatch")
 		return false
 	}
-	log.Debug().Msg("Cookie is valid")
+	sublog.Debug().Msg("Cookie is valid")
 	return true
 }
 
@@ -117,21 +119,21 @@ func RandStringRunes(n int) string {
 	for i := 0; i < n; i++ {
 		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
 		if err != nil {
-			log.Error().Err(err).Msg("Error in random generator. Ignoring and return empty string")
+			sublog.Error().Err(err).Msg("Error in random generator. Ignoring and return empty string")
 			return ""
 		}
 		b[i] = letters[num.Int64()]
 	}
-	log.Debug().Msgf("Random generation complete. Generated string is '%s'", string(b))
+	sublog.Debug().Msgf("Random generation complete. Generated string is '%s'", string(b))
 	return string(b)
 }
 
 func UserConflict(err error) bool {
-	log.Debug().Msg("Check unique user error")
+	sublog.Debug().Msg("Check unique user error")
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		log.Debug().Msgf("Error message: %s", pgErr.Message)
-		log.Debug().Msgf("Error code: %s", pgErr.Code)
+		sublog.Debug().Msgf("Error message: %s", pgErr.Message)
+		sublog.Debug().Msgf("Error code: %s", pgErr.Code)
 		if pgErr.Code == "23505" {
 			return true
 		}
@@ -140,11 +142,11 @@ func UserConflict(err error) bool {
 }
 
 func OrderUnique(err error) bool {
-	log.Debug().Msg("Check unique user error")
+	sublog.Debug().Msg("Check unique user error")
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		log.Debug().Msgf("Error message: %s", pgErr.Message)
-		log.Debug().Msgf("Error code: %s", pgErr.Code)
+		sublog.Debug().Msgf("Error message: %s", pgErr.Message)
+		sublog.Debug().Msgf("Error code: %s", pgErr.Code)
 		if pgErr.Code == "23505" {
 			if strings.Contains(pgErr.Message, "orders_order_idx") {
 				return true
@@ -155,11 +157,11 @@ func OrderUnique(err error) bool {
 }
 
 func OrderExists(err error) bool {
-	log.Debug().Msg("Check unique user's order error")
+	sublog.Debug().Msg("Check unique user's order error")
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
-		log.Debug().Msgf("Error message: %s", pgErr.Message)
-		log.Debug().Msgf("Error code: %s", pgErr.Code)
+		sublog.Debug().Msgf("Error message: %s", pgErr.Message)
+		sublog.Debug().Msgf("Error code: %s", pgErr.Code)
 		if pgErr.Code == "23505" {
 			if strings.Contains(pgErr.Message, "orders_order_user_idx") {
 				return true
@@ -169,12 +171,13 @@ func OrderExists(err error) bool {
 	return false
 }
 
-func UserNotFound(err error) bool {
-	log.Debug().Msg("Check empty row error")
+func EmptyRow(err error) bool {
+	sublog.Debug().Msg("Check empty row error")
 	return err.Error() == "no rows in result set"
 }
 
 func SetCookie(w http.ResponseWriter, name, value string) {
+	sublog.Debug().Msgf("Creating new cookie %v", name)
 	cookie := http.Cookie{
 		Name:   name,
 		Value:  value,
@@ -185,29 +188,41 @@ func SetCookie(w http.ResponseWriter, name, value string) {
 }
 
 func GetUser(r *http.Request) (string, error) {
+	sublog.Debug().Msg("Reading user name from cookie %v")
 	cookie, err := r.Cookie("username")
 	if err != nil {
-		log.Error().Err(err)
+		sublog.Error().Err(err)
 		return "", err
 	}
 	username := cookie.Value
-	log.Debug().Msgf("Username from cookie is %v", username)
+	sublog.Debug().Msgf("Username from cookie is %v", username)
 	return username, nil
 }
 
 func CheckOrder(s []byte) bool {
+	sublog.Debug().Msg("Checking order number wirh luhn algorithm")
 	str := string(s)
 	err := luhn.Check(str)
 	if err != nil {
 		switch err {
 		case checksum.ErrInvalidNumber:
-			log.Error().Msg("Invalid order number")
+			sublog.Error().Msg("Invalid order number")
 			return false
 		case checksum.ErrInvalidChecksum:
-			log.Error().Msg("Invalid order checksum")
+			sublog.Error().Msg("Invalid order checksum")
 			return false
 		}
 	}
-	log.Info().Msg("Order number is valid")
+	sublog.Info().Msg("Order number is valid")
 	return true
+}
+
+func BalanceTooLow(err error) bool {
+	sublog.Debug().Msg("Check low balance error")
+	return err.Error() == "we need to build more ziggurats"
+}
+
+func WithdrawnError(err error) bool {
+	sublog.Debug().Msg("Check zero affected rows error")
+	return err.Error() == "invalid order number"
 }

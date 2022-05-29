@@ -16,6 +16,8 @@ type Config struct {
 	AccSystem string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 }
 
+var sublog = log.With().Str("component", "config").Logger()
+
 //NewConfig - выделение памяти для новой конфигурации
 func New() *Config {
 	s := Config{
@@ -25,11 +27,11 @@ func New() *Config {
 	}
 	err := s.readEnv()
 	if err != nil {
-		log.Error().Err(err).Msg("Critical error whire reading ENV. Quitting")
+		sublog.Error().Err(err).Msg("Critical error whire reading ENV. Quitting")
 		os.Exit(1)
 	}
 	s.readCli()
-	log.Log().Msgf("Setuped log level is %s", zerolog.GlobalLevel().String())
+	sublog.Log().Msgf("Setuped log level is %s", zerolog.GlobalLevel().String())
 	return &s
 }
 

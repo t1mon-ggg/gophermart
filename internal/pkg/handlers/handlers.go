@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi"
@@ -30,13 +31,15 @@ type data struct {
 	orders []models.Order
 }
 
+var sublog = log.With().Str("component", "handlers").Logger()
+
 func NewGopherMart() *Gophermart {
 	app := Gophermart{}
 	app.Config = config.New()
 	s, err := storage.New(app.Config.DBPath)
 	if err != nil {
-		log.Error().Err(err).Msg("")
-		log.Fatal().Msg("Application critical error. Quiting")
+		sublog.Error().Err(err).Msg("")
+		sublog.Fatal().Msg("Application critical error. Quiting")
 		os.Exit(1)
 	}
 	app.db = s
@@ -65,43 +68,46 @@ func (s *Gophermart) Router(r chi.Router) {
 }
 
 func otherHandler(w http.ResponseWriter, r *http.Request) {
-	log.Debug().Msg("Wrong request recieved")
+	sublog.Info().Msg("Wrong request recieved")
 	http.Error(w, "Wrong request format", http.StatusBadRequest)
 }
 
 func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
+	sublog.Info().Msg("Processing new order")
 	var newuser models.User
 	ctype := r.Header.Get("Content-Type")
 	if ctype != "application/json" {
+		sublog.Info().Msg("Content type invalid")
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("Request body read error")
+		sublog.Error().Err(err).Msg("Request body read error")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msgf("Recieved body %s", string(body))
+	sublog.Debug().Msgf("Recieved body %s", string(body))
 	err = json.Unmarshal(body, &newuser)
 	if err != nil {
-		log.Error().Err(err).Msg("Error while parsing JSON body")
+		sublog.Error().Err(err).Msg("Error while parsing JSON body")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
 	if newuser.Name == "" || newuser.Password == "" {
-		log.Error().Err(err).Msg("Wrong user data")
+		sublog.Error().Err(err).Msg("Wrong user data")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
 	pass, err := helpers.SecurePassword(newuser.Password)
 	if err != nil {
-		log.Error().Err(err).Msg("")
+		sublog.Error().Err(err).Msg("")
 	}
 	iv := helpers.RandStringRunes(12)
 	err = s.db.CreateUser(newuser.Name, pass, iv)
 	if err != nil {
 		if helpers.UserConflict(err) {
+			sublog.Info().Msgf("User %v already exist", newuser.Name)
 			http.Error(w, "User already exists", http.StatusConflict)
 			return
 		}
@@ -110,93 +116,103 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	helpers.SetCookie(w, "username", newuser.Name)
 	helpers.SetCookie(w, "user_id", helpers.GenerateCookieValue(newuser.Name, pass, r.RemoteAddr, iv))
+	sublog.Info().Msgf("User %v registered", newuser.Name)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte{})
 }
 
 func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
+	sublog.Info().Msg("Processing authorization request")
 	var user models.User
 	ctype := r.Header.Get("Content-Type")
 	if ctype != "application/json" {
+		sublog.Info().Msg("Invalid content type")
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("Request body read error")
+		sublog.Error().Err(err).Msg("Request body read error")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msgf("Recieved body %s", string(body))
+	sublog.Debug().Msgf("Recieved body %s", string(body))
 	err = json.Unmarshal(body, &user)
 	if err != nil {
-		log.Error().Err(err).Msg("Error while parsing JSON body")
+		sublog.Error().Err(err).Msg("Error while parsing JSON body")
 		http.Error(w, "Incorrect request format", http.StatusBadRequest)
 		return
 	}
 	u, err := s.db.GetUser(user.Name)
 	if err != nil {
-		log.Error().Err(err).Msg("")
-		if helpers.UserNotFound(err) {
-			log.Debug().Msgf("User %s not found", user.Name)
+		if helpers.EmptyRow(err) {
+			sublog.Info().Msgf("User %s not found", user.Name)
 			http.Error(w, "Wrond username or password", http.StatusUnauthorized)
 			return
 		}
+		sublog.Error().Err(err).Msg("")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	if !helpers.ComparePassword(user.Password, u.Password) {
-		log.Debug().Msgf("User %s not found", user.Name)
+		sublog.Info().Msgf("Password %v invalid", user.Password)
 		http.Error(w, "Wrond username or password", http.StatusUnauthorized)
 		return
 	}
 	helpers.SetCookie(w, "username", user.Name)
 	helpers.SetCookie(w, "user_id", helpers.GenerateCookieValue(user.Name, u.Password, r.RemoteAddr, u.Random))
+	sublog.Info().Msgf("User %v authorized", user.Name)
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte{})
 }
 
 func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
+	sublog.Info().Msg("Processing new order")
 	ctype := r.Header.Get("Content-Type")
-	if ctype != "text/plain" {
+	if !strings.Contains(ctype, "text/plain") {
+		sublog.Info().Msg("Invalid content type")
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Error().Err(err).Msg("Request body read error")
+		sublog.Error().Err(err).Msg("Request body read error")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	user, err := helpers.GetUser(r)
 	if err != nil {
-		log.Debug().Msg("Username cookie missing")
+		sublog.Info().Msg("Username cookies missing or invalid")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	log.Debug().Msgf("Recieved body %s", string(body))
+	sublog.Debug().Msgf("Recieved body %s", string(body))
 	order := string(body)
 	if !helpers.CheckOrder(body) {
+		sublog.Info().Msg("Invalid order number")
 		http.Error(w, "Incorrect order format", http.StatusUnprocessableEntity)
 		return
 	}
-	log.Debug().Msgf("New order %v from user %v", order, user)
+	sublog.Debug().Msgf("New order %v from user %v", order, user)
 	err = s.db.CreateOrder(order, user)
 	if err != nil {
 		if helpers.OrderUnique(err) {
+			sublog.Info().Msg("Order already exist. Created by another user")
 			w.WriteHeader(http.StatusConflict)
 			w.Write([]byte("Order already created by another user"))
 			return
 		}
 		if helpers.OrderExists(err) {
+			sublog.Info().Msg("Order already processed early")
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("Order already uploaded"))
 			return
 		}
-		log.Error().Err(err).Msg("Create order error")
+		sublog.Error().Err(err).Msg("Create order error")
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+	sublog.Info().Msg("Order successfully created")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte("Order accepted"))
 	go s.AccrualAPI(user, order)
@@ -204,58 +220,59 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 
 func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 	user, err := helpers.GetUser(r)
-	log.Debug().Msgf("Get_Order user is %v", user)
+	sublog.Info().Msgf("Request user's %v orders", user)
 	if err != nil {
-		log.Debug().Msg("Username cookie missing")
+		sublog.Info().Msg("Username not recognized")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	o, err := s.db.GetOrders(user)
 	if err != nil {
-		log.Error().Err(err)
+		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msgf("Get_Orders result is %v", o)
+	sublog.Debug().Msgf("Get_Orders result is %v", o)
 	if len(o) == 0 {
-		log.Debug().Msg("Orders not found")
+		sublog.Debug().Msg("Orders not found")
 		http.Error(w, "No orders found", http.StatusNoContent)
 		return
 	}
 	body, err := json.Marshal(o)
 	if err != nil {
-		log.Error().Err(err)
+		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msg("Request list of orders complete")
+	sublog.Debug().Msg("Request list of orders complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
 }
 
 func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
+	sublog.Info().Msg("Processing request of a balance")
 	type b struct {
 		Balance   float32 `json:"balance"`
 		Withdrawn float32 `json:"withdrawn"`
 	}
 	answer := b{}
 	user, err := helpers.GetUser(r)
-	log.Debug().Msgf("Get_Balance user is %v", user)
 	if err != nil {
-		log.Debug().Msg("Username cookie missing")
+		sublog.Info().Msg("Username not recognized")
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+	sublog.Debug().Msgf("Get_Balance user is %v", user)
 	balance, withdrawn, err := s.db.GetBalance(user)
 	if err != nil {
-		log.Error().Err(err)
+		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msgf("User's %v balance is %v and withdrawn is %v", user, balance, withdrawn)
+	sublog.Debug().Msgf("User's %v balance is %v and withdrawn is %v", user, balance, withdrawn)
 	if balance == 0 && withdrawn == 0 {
-		log.Info().Msg("Transactions not found")
+		sublog.Info().Msg("Transactions not found")
 		http.Error(w, "Transactions not found", http.StatusNoContent)
 		return
 	}
@@ -263,39 +280,115 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	answer.Withdrawn = withdrawn
 	body, err := json.Marshal(answer)
 	if err != nil {
-		log.Error().Err(err)
+		sublog.Error().Err(err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
-	log.Debug().Msg("Request user's balance complete")
+	sublog.Info().Msg("Request of user's balance complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
 }
 
 func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Application in development", http.StatusInternalServerError)
+	sublog.Info().Msg("Processing request of a new withdrawn")
+	ctype := r.Header.Get("Content-Type")
+	if ctype != "application/json" {
+		sublog.Info().Msg("Invalid content type")
+		http.Error(w, "Bad request", http.StatusBadRequest)
+		return
+	}
+	user, err := helpers.GetUser(r)
+	if err != nil {
+		sublog.Info().Msg("Username cookies missing or invalid")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	withdrawn := models.Order{}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		sublog.Error().Err(err).Msg("Request body read error")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	err = json.Unmarshal(body, &withdrawn)
+	if err != nil {
+		sublog.Error().Err(err).Msg("Error while parsing JSON body")
+		http.Error(w, "Incorrect request format", http.StatusBadRequest)
+		return
+	}
+	err = s.db.UpdateWithdrawn(withdrawn.Withdrawn, user, withdrawn.Number)
+	if err != nil {
+		if helpers.BalanceTooLow(err) {
+			sublog.Info().Msg("Not enough bonuses on the balance")
+			http.Error(w, "There are not enough funds in the account", http.StatusPaymentRequired)
+			return
+		}
+		if helpers.WithdrawnError(err) {
+			sublog.Info().Msg("Wrong order number")
+			http.Error(w, "Invalid order number", http.StatusUnprocessableEntity)
+			return
+		}
+	}
+	sublog.Info().Msg("Withdrwan successfulyy processed")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
 }
 
 func (s *Gophermart) getBalanceWithdraw(w http.ResponseWriter, r *http.Request) {
-	http.Error(w, "Application in development", http.StatusInternalServerError)
+	sublog.Info().Msg("Processing request of a withdrawns")
+	user, err := helpers.GetUser(r)
+	if err != nil {
+		sublog.Info().Msg("Username not recognized")
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	sublog.Debug().Msgf("Get_Withdrawns for %v", user)
+	withdrawns, err := s.db.GetWithdrawns(user)
+	if err != nil {
+		if helpers.EmptyRow(err) {
+			sublog.Info().Msg("Withdrawns not found")
+			http.Error(w, "Withdrawns not found", http.StatusNoContent)
+			return
+		}
+		sublog.Info().Msg("Error in requsting withdrawns")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if len(withdrawns) == 0 {
+		sublog.Info().Msg("Withdrawns not found")
+		http.Error(w, "Withdrawns not found", http.StatusNoContent)
+		return
+	}
+	body, err := json.Marshal(withdrawns)
+	if err != nil {
+		sublog.Error().Err(err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	sublog.Info().Msg("Request of user's withdrawns complete")
+	w.Header().Add("Content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(body)
+
 }
 
 //AuthChecker - check auth cookie for custom urls
 func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
+	sublog.Debug().Msg("Request authorization tokens check")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var value string
 		var user string
 		free := false
 		if r.RequestURI == "/api/user/register" || r.RequestURI == "/api/user/login" || r.RequestURI == "/" {
-			log.Debug().Msg("Skip auth check. All users area")
+			sublog.Debug().Msg("Skip auth check. All users area")
 			free = true
 			next.ServeHTTP(w, r)
 		}
 		if !free {
 			cookies := r.Cookies()
 			if len(cookies) == 0 {
-				log.Debug().Msg("No cookies in request")
+				sublog.Debug().Msg("No cookies in request")
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
@@ -304,24 +397,25 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 			for _, cookie := range cookies {
 				if cookie.Name == "user_id" {
 					foundC = true
-					log.Debug().Msg("Cookie 'user_id' was found")
+					sublog.Debug().Msg("Cookie 'user_id' was found")
 					value = cookie.Value
 				}
 				if cookie.Name == "username" {
 					foundU = true
-					log.Debug().Msg("Cookie 'username' was found")
+					sublog.Debug().Msg("Cookie 'username' was found")
 					user = cookie.Value
 				}
 			}
 			if !foundU || !foundC {
-				log.Debug().Msg("Cookies 'username' or 'user_id' was not found")
+				sublog.Debug().Msg("Cookies 'username' or 'user_id' was not found")
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
 			u, err := s.db.GetUser(user)
 			if err != nil {
-				log.Error().Err(err).Msg("Get user info error")
-				if helpers.UserNotFound(err) {
+				sublog.Error().Err(err).Msg("Get user info error")
+				if helpers.EmptyRow(err) {
+					sublog.Debug().Msg("User not found")
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
@@ -330,17 +424,19 @@ func (s *Gophermart) AuthChecker(next http.Handler) http.Handler {
 			}
 			ip := r.RemoteAddr
 			if !helpers.CompareCookie(value, user, u.Password, ip, u.Random) {
-				log.Debug().Msg("Cookie missmatch")
+				sublog.Debug().Msg("Cookie is not valid")
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
-			log.Debug().Msg("Auth cookie processing successful")
+			sublog.Debug().Msg("Authorization cookie processing end")
 			next.ServeHTTP(w, r)
 		}
 	})
 }
 
 func (s *Gophermart) AccrualAPI(login, order string) {
+	subsublog := sublog.With().Str("component", "accrual api").Logger()
+	subsublog.Info().Msg("Processing new order withh accrual service.")
 	/*
 		Accrual answer example
 
@@ -361,51 +457,57 @@ func (s *Gophermart) AccrualAPI(login, order string) {
 	}
 	var acc accrual
 	url := fmt.Sprintf("%s/api/orders/%s", s.Config.AccSystem, order)
-	log.Debug().Msgf("Actual accrual system request is '%s'", url)
+	subsublog.Debug().Msgf("Actual accrual system request is '%s'", url)
 	client := http.Client{}
 	request, err := http.NewRequest(http.MethodGet, url, bytes.NewReader([]byte{}))
 	if err != nil {
-		log.Error().Err(err).Msg("Error in creating request to accrual system")
+		subsublog.Error().Err(err).Msg("Error in creating request to accrual system")
 		return
 	}
 	var wait bool
 	for !wait {
 		response, err := client.Do(request)
 		if err != nil {
-			log.Error().Err(err).Msg("Error in request to accrual system")
+			subsublog.Error().Err(err).Msg("Error in request to accrual system")
 			return
 		}
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK {
-			log.Debug().Msgf("Status code not 200. Recieved code %d", response.StatusCode)
-			time.Sleep(5 * time.Second)
+			subsublog.Debug().Msgf("Status code not 200. Recieved code %d. Waiting for 15 seconds to the next try", response.StatusCode)
+			time.Sleep(15 * time.Second)
 			continue
 		}
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
-			log.Error().Err(err)
+			subsublog.Error().Err(err)
 		}
-		log.Debug().Msgf("Recieved json is %v", string(body))
+		subsublog.Debug().Msgf("Recieved json is %v", string(body))
 		err = json.Unmarshal(body, &acc)
 		if err != nil {
-			log.Error().Err(err).Msg("Error in unmarshaling answer from accrual system")
+			subsublog.Error().Err(err).Msg("Error in unmarshaling answer from accrual system")
 		}
-		time.Sleep(5 * time.Second)
 		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
+			subsublog.Debug().Msg("Accrual calculation in progress. Waiting for 15 seeconds to the next try")
 			wait = true
+		}
+		if !wait {
+			time.Sleep(15 * time.Second)
 		}
 	}
 	if acc.Status == "INVALID" {
+
 		acc.Val = 0
 	}
+	subsublog.Info().Msgf("Accrual processing complete. Processing status is %v", acc.Status)
 	err = s.db.UpdateOrder(order, acc.Status, acc.Val)
 	if err != nil {
-		log.Error().Err(err)
+		subsublog.Error().Err(err)
 		return
 	}
 	err = s.db.UpdateBalance(login, acc.Val)
 	if err != nil {
-		log.Error().Err(err)
+		subsublog.Error().Err(err)
 		return
 	}
+	subsublog.Info().Msg("Accrual processing complete. Exit from goroutine")
 }
