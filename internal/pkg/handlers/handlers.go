@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -494,9 +495,19 @@ func (s *Gophermart) accrualAPI(login, order string) {
 		}
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK {
-			subsublog.Debug().Msgf("Status code not 200. Recieved code %d. Waiting for 1 second to the next try", response.StatusCode)
-			time.Sleep(1 * time.Second)
-			continue
+			if response.StatusCode == http.StatusTooManyRequests {
+				retryTime := response.Header.Get("Retry-After")
+				t, err := strconv.Atoi(retryTime)
+				if err != nil {
+					log.Debug().Err(err).Msg("String to int convertation failed")
+				}
+				time.Sleep(time.Duration(t) * time.Second)
+			} else {
+				subsublog.Debug().Msgf("Status code not 200. Recieved code %d. Waiting for 1 second to the next try", response.StatusCode)
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
 		}
 		body, err := io.ReadAll(response.Body)
 		if err != nil {
