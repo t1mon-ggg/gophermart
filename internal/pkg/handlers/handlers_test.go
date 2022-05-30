@@ -20,6 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"github.com/t1mon-ggg/gophermart/internal/pkg/config"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
 	"github.com/t1mon-ggg/gophermart/internal/pkg/storage"
