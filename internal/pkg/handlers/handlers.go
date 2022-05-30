@@ -543,5 +543,5 @@ func (s *Gophermart) accrualAPI(login, order string) {
 		subsublog.Error().Err(err)
 		return
 	}
-	subsublog.Info().Msg("Accrual processing complete. Exit from goroutine")
+	subsublog.Info().Msgf("Accrual order %v processing complete. Exit from goroutine", order)
 }
