@@ -19,5 +19,6 @@ func main() {
 	r.Route("/", app.Router)
 	log.Info().Msg("Chi router configured. Starting web bind")
 
-	http.ListenAndServe(app.Config.Bind, r)
+	err := http.ListenAndServe(app.Config.Bind, r)
+	log.Fatal().Err(err).Msg("Fatal error in starting web server")
 }

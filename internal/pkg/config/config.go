@@ -79,7 +79,7 @@ var flags = map[string]string{
 var path = flag.String("a", "", fmt.Sprintf("reads %s from flags", flags["a"]))
 var bind = flag.String("d", "", fmt.Sprintf("reads %s from flags", flags["d"]))
 var accPath = flag.String("r", "", fmt.Sprintf("reads %s from flags", flags["r"]))
-var debug = flag.Bool("debug", false, "set log level to debug. overwrite other levels")
+var _ = flag.Bool("debug", false, "set log level to debug. overwrite other levels")
 var level = flag.Int("l", int(zerolog.ErrorLevel), "set log level")
 
 //ReadCli - чтение флагов командной строки

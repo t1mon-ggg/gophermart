@@ -113,7 +113,10 @@ func (s *Gophermart) postRegister(w http.ResponseWriter, r *http.Request) {
 	helpers.SetCookie(w, "user_id", helpers.GenerateCookieValue(newuser.Name, pass, r.RemoteAddr, iv))
 	sublog.Info().Msgf("User %v registered", newuser.Name)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte{})
+	_, err = w.Write([]byte{})
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
 }
 
 //postLogin - handling/api/user/login on method POST
@@ -160,7 +163,10 @@ func (s *Gophermart) postLogin(w http.ResponseWriter, r *http.Request) {
 	helpers.SetCookie(w, "user_id", helpers.GenerateCookieValue(user.Name, u.Password, r.RemoteAddr, u.Random))
 	sublog.Info().Msgf("User %v authorized", user.Name)
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte{})
+	_, err = w.Write([]byte{})
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
 }
 
 //postOrders - handling/api/user/orders on method POST
@@ -197,13 +203,21 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 		if helpers.OrderUnique(err) {
 			sublog.Info().Msg("Order already exist. Created by another user")
 			w.WriteHeader(http.StatusConflict)
-			w.Write([]byte("Order already created by another user"))
+			i, err := w.Write([]byte("Order already created by another user"))
+			log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+			if err != nil {
+				log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+			}
 			return
 		}
 		if helpers.OrderExists(err) {
 			sublog.Info().Msg("Order already processed early")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte("Order already uploaded"))
+			i, err := w.Write([]byte("Order already uploaded"))
+			log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+			if err != nil {
+				log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+			}
 			return
 		}
 		sublog.Error().Err(err).Msg("Create order error")
@@ -212,7 +226,11 @@ func (s *Gophermart) postOrders(w http.ResponseWriter, r *http.Request) {
 	}
 	sublog.Info().Msg("Order successfully created")
 	w.WriteHeader(http.StatusAccepted)
-	w.Write([]byte("Order accepted"))
+	i, err := w.Write([]byte("Order accepted"))
+	log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
 	go s.accrualAPI(user, order)
 }
 
@@ -246,7 +264,12 @@ func (s *Gophermart) getOrders(w http.ResponseWriter, r *http.Request) {
 	sublog.Debug().Msg("Request list of orders complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	i, err := w.Write(body)
+	log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
+
 }
 
 //getBalance - handling/api/user/balance on method GET
@@ -276,7 +299,11 @@ func (s *Gophermart) getBalance(w http.ResponseWriter, r *http.Request) {
 	sublog.Info().Msg("Request of user's balance complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	i, err := w.Write(body)
+	log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
 }
 
 //postBalanceWithdraw - handling/api/user/balance/withdraw on method POST
@@ -328,7 +355,11 @@ func (s *Gophermart) postBalanceWithdraw(w http.ResponseWriter, r *http.Request)
 	}
 	sublog.Info().Msg("Withdrwan successfulyy processed")
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	i, err := w.Write(body)
+	log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
 }
 
 //getBalanceWithdraw - handling/api/user/balance/withdraw on method GET
@@ -367,7 +398,11 @@ func (s *Gophermart) getBalanceWithdraw(w http.ResponseWriter, r *http.Request) 
 	sublog.Info().Msg("Request of user's withdraws complete")
 	w.Header().Add("Content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(body)
+	i, err := w.Write(body)
+	log.Debug().Msgf("%v bytes wrote to ResponseWriter", i)
+	if err != nil {
+		log.Debug().Err(err).Msg("Error in http.ResponseWriter")
+	}
 
 }
 

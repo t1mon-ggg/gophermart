@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -540,7 +541,10 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
 	err := cmd.Start()
 	require.NoError(t, err)
-	defer cmd.Process.Kill()
+	defer func(p *os.Process) {
+		err := p.Kill()
+		sublog.Debug().Err(err).Msg("Error in closing accrual.exe")
+	}(cmd.Process)
 	time.Sleep(10 * time.Second)
 	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
 	require.NotZero(t, cmd.Process.Pid)
@@ -672,7 +676,10 @@ func TestGophermart_postBalanceWithdraw(t *testing.T) {
 	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
 	err := cmd.Start()
 	require.NoError(t, err)
-	defer cmd.Process.Kill()
+	defer func(p *os.Process) {
+		err := p.Kill()
+		sublog.Debug().Err(err).Msg("Error in closing accrual.exe")
+	}(cmd.Process)
 	time.Sleep(10 * time.Second)
 	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
 	require.NotZero(t, cmd.Process.Pid)
@@ -773,7 +780,10 @@ func TestGophermart_getBalanceWithdraw(t *testing.T) {
 	cmd := exec.Command("C:\\Users\\пользователь\\Documents\\Education\\gophermart\\cmd\\accrual\\accrual_windows_amd64.exe")
 	err := cmd.Start()
 	require.NoError(t, err)
-	defer cmd.Process.Kill()
+	defer func(p *os.Process) {
+		err := p.Kill()
+		sublog.Debug().Err(err).Msg("Error in closing accrual.exe")
+	}(cmd.Process)
 	time.Sleep(10 * time.Second)
 	log.Debug().Msgf("Accrual stated with pid %v", cmd.Process.Pid)
 	require.NotZero(t, cmd.Process.Pid)
@@ -819,7 +829,6 @@ func TestGophermart_getBalanceWithdraw(t *testing.T) {
 		code      int
 		withdraws []models.Withdraw
 		cType     string
-		content   []models.Withdraw
 	}
 	tests := []struct {
 		name string
@@ -875,7 +884,10 @@ func TestGophermart_getBalanceWithdraw(t *testing.T) {
 			assert.Equal(t, tt.want.code, response.StatusCode)
 			if tt.want.code == http.StatusOK {
 				g := make([]models.Withdraw, 0)
-				json.Unmarshal([]byte(got), &g)
+				err := json.Unmarshal([]byte(got), &g)
+				if err != nil {
+					log.Debug().Err(err).Msg("Error in unmarshaling response")
+				}
 				for i, w := range g {
 					assert.Equal(t, tt.want.withdraws[i].Number, w.Number)
 					assert.Equal(t, tt.want.withdraws[i].Withdraw, w.Withdraw)
