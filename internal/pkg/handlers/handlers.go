@@ -500,6 +500,7 @@ func (s *Gophermart) accrualAPI(login, order string) {
 				t, err := strconv.Atoi(retryTime)
 				if err != nil {
 					log.Debug().Err(err).Msg("String to int convertation failed")
+					t = 60
 				}
 				time.Sleep(time.Duration(t) * time.Second)
 			} else {
