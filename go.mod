@@ -1,6 +1,6 @@
 module github.com/t1mon-ggg/gophermart
 
-go 1.18
+go 1.17
 
 require (
 	github.com/caarlos0/env v3.5.0+incompatible
