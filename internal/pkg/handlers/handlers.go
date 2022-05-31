@@ -475,6 +475,7 @@ func (s *Gophermart) authChecker(next http.Handler) http.Handler {
 }
 
 func (s *Gophermart) accrualAPI(login, order string) {
+	state := "NEW"
 	subsublog := sublog.With().Str("subcomponent", "accrual api").Logger()
 	subsublog.Info().Msg("Processing new order withh accrual service.")
 	acc := models.Accrual{}
@@ -495,6 +496,10 @@ func (s *Gophermart) accrualAPI(login, order string) {
 		}
 		defer response.Body.Close()
 		if response.StatusCode != http.StatusOK {
+			if response.StatusCode == http.StatusNoContent {
+				subsublog.Info().Msgf("Order %v not registered in accrual system. Stopping goroutine.", order)
+				return
+			}
 			if response.StatusCode == http.StatusTooManyRequests {
 				retryTime := response.Header.Get("Retry-After")
 				t, err := strconv.Atoi(retryTime)
@@ -523,6 +528,13 @@ func (s *Gophermart) accrualAPI(login, order string) {
 		if acc.Status == "INVALID" || acc.Status == "PROCESSED" {
 			subsublog.Debug().Msg("Accrual calculation in progress.")
 			wait = true
+		}
+		if (acc.Status == "REGISTERED" || acc.Status == "PROCESSING") && acc.Status != state {
+			state = acc.Status
+			err = s.db.UpdateOrder(order, acc.Status, 0)
+			if err != nil {
+				subsublog.Error().Err(err)
+			}
 		}
 		if !wait {
 			sublog.Debug().Msg("Waiting for 1 seeconds to the next try")
