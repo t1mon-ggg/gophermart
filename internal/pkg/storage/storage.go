@@ -1,0 +1,304 @@
+package storage
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"math"
+	"time"
+
+	"github.com/jackc/pgx/v4/pgxpool"
+	"github.com/rs/zerolog/log"
+
+	"github.com/t1mon-ggg/gophermart/internal/pkg/models"
+)
+
+//Postgres
+
+const (
+	dbSchema = `
+	CREATE TABLE IF NOT EXISTS users (
+		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
+		"name" text NOT NULL UNIQUE,
+		"password" text NOT NULL,
+		"random_iv" text NOT NULL,
+		CONSTRAINT users_id_pk PRIMARY KEY (id)
+	);
+
+	CREATE TABLE IF NOT EXISTS balance (
+		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
+		"name" text NOT NULL UNIQUE,
+		"balance" float8 NOT NULL DEFAULT 0,
+		"withdraw" float8 NOT NULL DEFAULT 0,
+		CONSTRAINT balance_id_pk PRIMARY KEY (id)
+	);
+
+	CREATE TABLE IF NOT EXISTS public.orders (
+		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
+		"order" text NOT NULL,
+		"name" text NOT NULL,
+		"status" text NOT NULL DEFAULT 'NEW',
+		"uploaded_at" timestamptz NOT NULL,
+		"accrual" float8 NOT NULL DEFAULT 0,
+		CONSTRAINT orders_fk FOREIGN KEY (name) REFERENCES public.users("name"),
+		CONSTRAINT orders_id_pk PRIMARY KEY (id)
+	);
+	CREATE TABLE IF NOT EXISTS public.withdraws (
+		id int4 NOT NULL GENERATED ALWAYS AS IDENTITY,
+		"name" text NOT NULL,
+		"order" text NOT NULL,
+		"processed_at"  timestamptz,
+		"withdraw" float8 NOT NULL DEFAULT 0,
+		CONSTRAINT withdraws_fk FOREIGN KEY (name) REFERENCES public.users("name")
+	);
+	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_user_idx ON public.orders ("order","name");
+	CREATE UNIQUE INDEX IF NOT EXISTS orders_order_idx ON public.orders ("order");
+	CREATE UNIQUE INDEX IF NOT EXISTS withdraws_user_order_idx ON public.withdraws ("order", "name");
+	CREATE UNIQUE INDEX IF NOT EXISTS withdraws_order_idx ON public.withdraws ("order");
+	`
+	createUser        = `INSERT INTO public.users ("name","password","random_iv") VALUES ($1,$2,$3)`
+	createUserBalance = `INSERT INTO public.balance ("name") VALUES ($1)`
+	getUser           = `SELECT "password", "random_iv" from public.users where "name" = $1`
+	createOrder       = `INSERT INTO public.orders ("order","name","uploaded_at") VALUES ($1,$2,$3)`
+	getOrders         = `SELECT "order", "status", "accrual", "uploaded_at" from public.orders where "name" = $1 ORDER BY "uploaded_at" DESC`
+	getBalance        = `SELECT "balance", "withdraw" FROM public.balance where "name" = $1`
+	updateOrder       = `UPDATE public.orders SET status=$1, accrual=$2 WHERE "order" = $3`
+	updateBalance     = `UPDATE public.balance SET balance=$1, withdraw=$2 WHERE "name" = $3`
+	createWithdraw    = `INSERT INTO public.withdraws ("name", "order", "processed_at", "withdraw")  VALUES ($1,$2,$3,$4)`
+	getWithdraws      = `SELECT "order", "withdraw", "processed_at" FROM public.withdraws WHERE "name" = $1 ORDER BY "processed_at" DESC`
+)
+
+type Database struct {
+	conn *pgxpool.Pool
+}
+
+var sublog = log.With().Str("component", "storage").Logger()
+
+func New(path string) (*Database, error) {
+	db := Database{}
+	d, err := open(path)
+	if err != nil {
+		sublog.Error().Msg("Error while connecting to Posgres database. Quiting")
+		return nil, err
+	}
+	db.conn = d
+
+	err = db.create()
+	if err != nil {
+		sublog.Error().Msg("Fatal error on table create. Quiting")
+		return nil, err
+	}
+	sublog.Info().Msg("Database object successfully created")
+	return &db, nil
+
+}
+
+func open(s string) (*pgxpool.Pool, error) {
+	sublog.Info().Msg("Connectiong to database")
+	db, err := pgxpool.Connect(context.Background(), s)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return nil, err
+	}
+	sublog.Info().Msg("Connection to database successfuly created")
+	return db, nil
+}
+
+func (s *Database) create() error {
+	sublog.Info().Msg("Creating databse scheme")
+	_, err := s.conn.Exec(context.Background(), dbSchema)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return err
+	}
+	sublog.Info().Msg("Tables already exists or successfully created")
+	return nil
+}
+
+func (s *Database) CreateUser(login, password, v string) error {
+	sublog.Info().Msgf("Creating user %v", login)
+	_, err := s.conn.Exec(context.Background(), createUser, login, password, v)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return err
+	}
+	sublog.Info().Msgf("User with name '%s' created", login)
+	_, err = s.conn.Exec(context.Background(), createUserBalance, login)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return err
+	}
+	return nil
+}
+
+func (s *Database) GetUser(login string) (models.User, error) {
+	sublog.Info().Msgf("Requesting user's %v data", login)
+	user := models.User{}
+	var password string
+	var random string
+	err := s.conn.QueryRow(context.Background(), getUser, login).Scan(&password, &random)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return user, err
+	}
+	sublog.Debug().Msgf("Sql result: password is %s, random is %s", password, random)
+	user.Name = login
+	user.Password = password
+	user.Random = random
+	sublog.Debug().Msgf("Found user %s with password %s and random %s", user.Name, user.Password, user.Random)
+	return user, nil
+}
+
+func (s *Database) GetOrders(login string) ([]models.Order, error) {
+	sublog.Info().Msgf("Requesting orders for user %v", login)
+	orders := make([]models.Order, 0)
+	rows, err := s.conn.Query(context.Background(), getOrders, login)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		order := models.Order{}
+		var number string
+		var status string
+		var accrual float32
+		var upload time.Time
+		err = rows.Scan(&number, &status, &accrual, &upload)
+		if err != nil {
+			sublog.Error().Err(err).Msg("Error while reading rows")
+			return nil, err
+		}
+		order.Number = number
+		order.Status = status
+		order.AccRual = accrual
+		order.Upload = upload
+		sublog.Debug().Msgf("Odrer: %v", order)
+		orders = append(orders, order)
+	}
+	sublog.Debug().Msgf("Result order slice: %v", orders)
+	return orders, nil
+}
+
+func (s *Database) CreateOrder(order, user string) error {
+	sublog.Info().Msgf("Creating new order %v", order)
+	_, err := s.conn.Exec(context.Background(), createOrder, order, user, time.Now())
+	if err != nil {
+		sublog.Info().Err(err).Msg("")
+		return err
+	}
+	sublog.Info().Msgf("Order %v created", order)
+	return nil
+}
+
+func (s *Database) UpdateOrder(order, status string, accrual float32) error {
+	sublog.Debug().Msgf("Updating order %v with new status %v and accrual value %v", order, status, accrual)
+	_, err := s.conn.Exec(context.Background(), updateOrder, status, accrual, order)
+	if err != nil {
+		sublog.Debug().Err(err).Msg("")
+		return err
+	}
+	sublog.Info().Msgf("Order %v updated", order)
+	return nil
+}
+
+func (s *Database) GetBalance(login string) (models.Balance, error) {
+	balance := models.Balance{}
+	var b float32
+	var w float32
+	sublog.Info().Msgf("Requesting balance for user %v", login)
+	err := s.conn.QueryRow(context.Background(), getBalance, login).Scan(&b, &w)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return balance, err
+	}
+	balance.Balance = b
+	balance.Withdraws = w
+	return balance, nil
+}
+
+func (s *Database) UpdateBalance(login string, accrual float32) error {
+	sublog.Info().Msg("Updating balance")
+	sublog.Debug().Msgf("User is %v and delta is %v", login, accrual)
+	balance, err := s.GetBalance(login)
+	if err != nil {
+		sublog.Error().Err(err).Msg("Error in get user balance request")
+		return err
+	}
+	log.Debug().Msgf("Old balance is %v", balance)
+	balance.Balance += accrual
+	if balance.Balance < 0 {
+		sublog.Error().Msg("Balance is not enough")
+		return errors.New("we need to build more ziggurats")
+	}
+	if accrual < 0 {
+		balance.Withdraws += float32(math.Abs(float64(accrual)))
+	}
+	sublog.Debug().Msgf("New balance is %v. New withdraws is %v", balance.Balance, balance.Withdraws)
+	_, err = s.conn.Exec(context.Background(), updateBalance, balance.Balance, balance.Withdraws, login)
+	if err != nil {
+		sublog.Error().Err(err).Msg("Error in update user balance request")
+		return err
+	}
+	sublog.Info().Msgf("User %v updated", login)
+	return nil
+}
+
+func (s *Database) CreateWithdraw(sum float32, login, order string) error {
+	sublog.Info().Msg("Updating withdraw")
+	sublog.Debug().Msgf("User is %v. withdraw sum is %.2f for order %v", login, sum, order)
+	sum = sum * -1
+	err := s.UpdateBalance(login, sum)
+	if err != nil {
+		sublog.Info().Msg("Update balance failed")
+		return err
+	}
+	_, err = s.conn.Exec(context.Background(), createWithdraw, login, order, time.Now(), float32(math.Abs(float64(sum))))
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return err
+	}
+	sublog.Info().Msg("Update orders withdraw complete")
+	return nil
+}
+
+func (s *Database) GetWithdraws(login string) ([]models.Withdraw, error) {
+	sublog.Info().Msgf("Requesting user's %v withdraws", login)
+	withdraws := make([]models.Withdraw, 0)
+	rows, err := s.conn.Query(context.Background(), getWithdraws, login)
+	if err != nil {
+		sublog.Error().Err(err).Msg("")
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		w := models.Withdraw{}
+		var number string
+		var processed time.Time
+		var withdraw float32
+		err = rows.Scan(&number, &withdraw, &processed)
+		if err != nil {
+			sublog.Error().Err(err).Msg("Error while reading rows")
+			return nil, err
+		}
+		w.Number = number
+		w.Withdraw = withdraw
+		w.Processed = processed
+		sublog.Debug().Msgf("Withdraw: %v", w)
+		if withdraw > 0 {
+			withdraws = append(withdraws, w)
+		}
+	}
+	sublog.Debug().Msgf("Result withdraw slice: %v", withdraws)
+	return withdraws, nil
+}
+
+func (s *Database) DeleteContent(table string) error {
+	_, err := s.conn.Exec(context.Background(), fmt.Sprintf("DELETE from \"%s\"", table))
+	if err != nil {
+		sublog.Error().Err(err).Msgf("Error while cleaning table %s", table)
+		return err
+	}
+	sublog.Debug().Msgf("Table %s is clean", table)
+	return nil
+}
