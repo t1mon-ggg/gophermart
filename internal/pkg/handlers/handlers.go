@@ -508,6 +508,7 @@ func (s *Gophermart) accrualAPI(login, order string) {
 					t = 60
 				}
 				time.Sleep(time.Duration(t) * time.Second)
+				continue
 			} else {
 				subsublog.Debug().Msgf("Status code not 200. Recieved code %d. Waiting for 1 second to the next try", response.StatusCode)
 				time.Sleep(1 * time.Second)
