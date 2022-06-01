@@ -27,6 +27,30 @@ import (
 	"github.com/t1mon-ggg/gophermart/internal/pkg/storage"
 )
 
+func dbClear(db *storage.Database, t *testing.T) error {
+	err := db.DeleteContent("orders")
+	assert.NoError(t, err)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteContent("balance")
+	assert.NoError(t, err)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteContent("withdraws")
+	assert.NoError(t, err)
+	if err != nil {
+		return err
+	}
+	err = db.DeleteContent("users")
+	assert.NoError(t, err)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func newServer(t *testing.T) (*cookiejar.Jar, *chi.Mux, *Gophermart) {
 	jar, err := cookiejar.New(nil)
 	require.NoError(t, err)
@@ -197,13 +221,7 @@ func TestGophermart_postRegister(t *testing.T) {
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err := dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -285,13 +303,7 @@ func TestGophermart_postLogin(t *testing.T) {
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err := dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -419,13 +431,7 @@ func TestGophermart_postOrder(t *testing.T) {
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err := dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -501,13 +507,7 @@ func TestGophermart_getOrders(t *testing.T) {
 			assert.Equal(t, tt.code, response.StatusCode)
 		})
 	}
-	err := s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err := dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -589,13 +589,7 @@ func TestGophermart_AccrualAPI(t *testing.T) {
 			}
 		})
 	}
-	err = s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err = dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -660,15 +654,9 @@ func TestGophermart_getBalance(t *testing.T) {
 				require.Equal(t, tt.want.balance, b)
 			}
 		})
-		err := s.db.DeleteContent("orders")
-		require.NoError(t, err)
-		err = s.db.DeleteContent("balance")
-		require.NoError(t, err)
-		err = s.db.DeleteContent("withdraws")
-		require.NoError(t, err)
-		err = s.db.DeleteContent("users")
-		require.NoError(t, err)
 	}
+	err := dbClear(s.db, t)
+	require.NoError(t, err)
 }
 
 func TestGophermart_postBalanceWithdraw(t *testing.T) {
@@ -761,13 +749,7 @@ func TestGophermart_postBalanceWithdraw(t *testing.T) {
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err = s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err = dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -895,13 +877,7 @@ func TestGophermart_getBalanceWithdraw(t *testing.T) {
 			}
 		})
 	}
-	err = s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err = dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -937,13 +913,7 @@ func TestGophermart_GzipSupportReq(t *testing.T) {
 			assert.Equal(t, tt.want, response.StatusCode)
 		})
 	}
-	err := s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err := dbClear(s.db, t)
 	require.NoError(t, err)
 }
 
@@ -1008,12 +978,6 @@ func TestGophermart_GzipSupportResp(t *testing.T) {
 			assert.Equal(t, tt.code, response.StatusCode)
 		})
 	}
-	err := s.db.DeleteContent("orders")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("balance")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("withdraws")
-	require.NoError(t, err)
-	err = s.db.DeleteContent("users")
+	err := dbClear(s.db, t)
 	require.NoError(t, err)
 }
